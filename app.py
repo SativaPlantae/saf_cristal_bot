@@ -4,9 +4,9 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
+from langchain.prompts import PromptTemplate
 
 # 🌿 Carrega variáveis de ambiente
 load_dotenv()
@@ -15,75 +15,75 @@ openai_key = os.getenv("OPENAI_API_KEY")
 # 🌱 Configuração da página
 st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
 st.title("🦗 Agente Inteligente do Sítio Cristal")
-st.markdown("Converse com o agente sobre os dados do SAF. Pode perguntar como se fosse pra um amigo — ele fala a sua língua!")
+st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
 
 # 📊 Carrega a planilha
 df = pd.read_csv("dados/data.csv")
 
-# 🔁 Inicializa histórico se ainda não existir
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# Inicializa memória real de conversa
 if "memory" not in st.session_state:
-    st.session_state.memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 👋 Mensagem de boas-vindas
-if len(st.session_state.chat_history) == 0:
+# Boas-vindas (só uma vez)
+if "has_greeted" not in st.session_state:
     with st.chat_message("assistant", avatar="🦗"):
         st.markdown("""
-Olá! 😊  
-Eu sou o **SAFBot**, seu ajudante aqui no Sítio Cristal 🌽  
-Pode me perguntar qualquer coisa sobre o projeto agroflorestal — desde o que está sendo produzido até como tudo funciona.  
-Prometo responder sem enrolação, de um jeito fácil de entender. Vamos nessa? 🌱
-""")
+Oi! 😊  
+Eu sou o SAFBot, seu ajudante aqui no Sítio Cristal. Pode me perguntar qualquer coisa sobre as plantações, os lucros, as espécies ou até como funciona esse tal de SAF.  
+Prometo explicar como se fosse uma boa conversa no campo 🌿🌽
+        """)
+    st.session_state.has_greeted = True
 
-# 🧠 Prompt natural e amigável com memória
-prompt_template = PromptTemplate.from_template("""
-Você é o SAFBot, um assistente simpático que responde com carinho, sem termos técnicos.
-Explique de forma simples, como se estivesse conversando com alguém da zona rural que nunca ouviu falar de SAF ou IA.
-Use o contexto da conversa para continuar respondendo de forma natural e acolhedora.
-
-Histórico:
-{chat_history}
-
-Pergunta: {pergunta}
-""")
-
-# 🤖 Inicializa modelo e cadeia com memória
+# Modelo e cadeia com memória
 llm = ChatOpenAI(
-    temperature=0.2,
+    temperature=0.3,
     model="gpt-4o",
     openai_api_key=openai_key
 )
 
-chain = LLMChain(
+prompt_template = PromptTemplate.from_template("""
+Você é o SAFBot, um assistente simpático e acolhedor que conversa com pessoas que não conhecem nada sobre agricultura ou tecnologia.
+
+Responda com empatia, explicações simples e num tom leve — como se estivesse explicando para um amigo curioso.
+
+Use o histórico da conversa para manter o contexto da resposta e evitar repetições desnecessárias.
+
+Histórico da conversa:
+{history}
+
+Usuário: {input}
+SAFBot:
+""")
+
+conversation = ConversationChain(
     llm=llm,
     prompt=prompt_template,
     memory=st.session_state.memory,
     verbose=False
 )
 
-# Entrada do usuário
-query = st.chat_input("O que você quer saber sobre o SAF?")
+# Campo de entrada
+query = st.chat_input("Digite aqui sua pergunta sobre o SAF:")
 
-# Exibe o histórico anterior
-for user_msg, bot_msg in st.session_state.chat_history:
+# Exibir histórico (manual)
+if "visible_history" not in st.session_state:
+    st.session_state.visible_history = []
+
+for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
     with st.chat_message("assistant", avatar="🦗"):
         st.markdown(bot_msg)
 
-# Se houver nova pergunta
+# Nova interação
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
     with st.chat_message("assistant", avatar="🦗"):
-        with st.spinner("Consultando os dados e lembranças do SAFBot..."):
-            try:
-                resposta = chain.run(pergunta=query)
-            except Exception as e:
-                resposta = f"❌ Ocorreu um erro: {e}"
+        with st.spinner("Deixa eu pensar aqui..."):
+            resposta = conversation.run(query)
         st.markdown(resposta)
 
-    # Atualiza o histórico visível
-    st.session_state.chat_history.append((query, resposta))
+    # Atualiza histórico visível
+    st.session_state.visible_history.append((query, resposta))
