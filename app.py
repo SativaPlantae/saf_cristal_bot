@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
-from langchain.prompts import PromptTemplate
 
 # 🌿 Carrega variáveis de ambiente
 load_dotenv()
@@ -20,11 +19,11 @@ st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como 
 # 📊 Carrega a planilha
 df = pd.read_csv("dados/data.csv")
 
-# Inicializa memória real de conversa
+# 🧠 Memória real de conversa
 if "memory" not in st.session_state:
-    st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
+    st.session_state.memory = ConversationBufferMemory(return_messages=True)
 
-# Boas-vindas (só uma vez)
+# 👋 Mensagem de boas-vindas só uma vez
 if "has_greeted" not in st.session_state:
     with st.chat_message("assistant", avatar="🦗"):
         st.markdown("""
@@ -34,38 +33,23 @@ Prometo explicar como se fosse uma boa conversa no campo 🌿🌽
         """)
     st.session_state.has_greeted = True
 
-# Modelo e cadeia com memória
+# 🤖 Modelo e cadeia com memória (sem prompt customizado)
 llm = ChatOpenAI(
     temperature=0.3,
     model="gpt-4o",
     openai_api_key=openai_key
 )
 
-prompt_template = PromptTemplate.from_template("""
-Você é o SAFBot, um assistente simpático e acolhedor que conversa com pessoas que não conhecem nada sobre agricultura ou tecnologia.
-
-Responda com empatia, explicações simples e num tom leve — como se estivesse explicando para um amigo curioso.
-
-Use o histórico da conversa para manter o contexto da resposta e evitar repetições desnecessárias.
-
-Histórico da conversa:
-{history}
-
-Usuário: {input}
-SAFBot:
-""")
-
 conversation = ConversationChain(
     llm=llm,
-    prompt=prompt_template,
     memory=st.session_state.memory,
     verbose=False
 )
 
-# Campo de entrada
+# Entrada do usuário
 query = st.chat_input("Digite aqui sua pergunta sobre o SAF:")
 
-# Exibir histórico (manual)
+# Histórico visível (exibido no Streamlit)
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
 
@@ -85,5 +69,5 @@ if query:
             resposta = conversation.run(query)
         st.markdown(resposta)
 
-    # Atualiza histórico visível
+    # Salvar histórico visível
     st.session_state.visible_history.append((query, resposta))
