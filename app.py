@@ -8,29 +8,46 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
 
-# Carregar variáveis de ambiente
+# 🌿 Carrega variáveis de ambiente
 load_dotenv()
 openai_key = os.getenv("OPENAI_API_KEY")
 
-# Configuração da página
+# 🌱 Configura página
 st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
+
+# 🌾 Título e descrição
 st.title("🦗 Agente Inteligente do Sítio Cristal")
 st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
 
-# Carrega a planilha (opcional, você pode usar depois com ferramentas)
+# Estilo customizado: botão no canto inferior direito
+st.markdown("""
+    <style>
+        .fixed-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# 🔁 Botão "Nova conversa"
+with st.container():
+    if st.markdown('<div class="fixed-button">', unsafe_allow_html=True):
+        if st.button("🔄 Nova conversa"):
+            st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
+            st.session_state.visible_history = []
+            st.experimental_rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# 📊 Carrega dados (usado no futuro)
 df = pd.read_csv("dados/data.csv")
 
-# Inicia memória da conversa
+# 🧠 Memória da conversa
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# Reiniciar conversa
-if st.button("🔄 Nova conversa"):
-    st.session_state.memory.clear()
-    st.session_state.visible_history = []
-    st.experimental_rerun()
-
-# Mensagem de boas-vindas (somente na primeira interação)
+# 🧾 Histórico visível (exibido no Streamlit)
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🦗"):
@@ -51,14 +68,20 @@ Fique à vontade, eu explico tudo de forma bem simples! 🌿
 Estou aqui pra conversar! 😄
         """)
 
-# Modelo OpenAI com GPT-4o
+# 💬 Mostra histórico anterior
+for user_msg, bot_msg in st.session_state.visible_history:
+    with st.chat_message("user", avatar="🧑‍🌾"):
+        st.markdown(user_msg)
+    with st.chat_message("assistant", avatar="🦗"):
+        st.markdown(bot_msg)
+
+# 🤖 Modelo e cadeia com identidade SAFBot
 llm = ChatOpenAI(
     temperature=0.3,
     model="gpt-4o",
     openai_api_key=openai_key
 )
 
-# Prompt com identidade definida do SAFBot
 prompt_template = PromptTemplate.from_template("""
 Você é o SAFBot 🌽🦗, um assistente virtual criado especialmente para o projeto **SAF Cristal** — um Sistema Agroflorestal que mistura árvores, cultivos agrícolas e práticas sustentáveis no campo.
 
@@ -78,7 +101,6 @@ Usuário: {input}
 SAFBot:
 """)
 
-# Cria a cadeia de conversa
 conversation = ConversationChain(
     llm=llm,
     prompt=prompt_template,
@@ -86,25 +108,19 @@ conversation = ConversationChain(
     verbose=False
 )
 
-# Exibe histórico de conversa anterior
-for user_msg, bot_msg in st.session_state.visible_history:
-    with st.chat_message("user", avatar="🧑‍🌾"):
-        st.markdown(user_msg)
-    with st.chat_message("assistant", avatar="🦗"):
-        st.markdown(bot_msg)
-
-# Entrada do usuário
+# 🧑‍🌾 Entrada do usuário
 query = st.chat_input("Digite aqui sua pergunta sobre o SAF:")
 
-# Se houver pergunta nova
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
+    with st.spinner("O SAFBot está pensando..."):
+        resposta = conversation.run(query)
+
+    # Renderiza APENAS uma vez
     with st.chat_message("assistant", avatar="🦗"):
-        with st.spinner("Puxando na memória do SAFBot..."):
-            resposta = conversation.run(query)
         st.markdown(resposta)
 
-    # Atualiza histórico visível
+    # Armazena no histórico visual (sem duplicação!)
     st.session_state.visible_history.append((query, resposta))
