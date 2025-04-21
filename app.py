@@ -12,42 +12,19 @@ from langchain.memory import ConversationBufferMemory
 load_dotenv()
 openai_key = os.getenv("OPENAI_API_KEY")
 
-# 🌱 Configura página
+# 🌱 Configuração da página
 st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
-
-# 🌾 Título e descrição
 st.title("🦗 Agente Inteligente do Sítio Cristal")
 st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
 
-# Estilo customizado: botão no canto inferior direito
-st.markdown("""
-    <style>
-        .fixed-button {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 9999;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# 🔁 Botão "Nova conversa"
-with st.container():
-    if st.markdown('<div class="fixed-button">', unsafe_allow_html=True):
-        if st.button("🔄 Nova conversa"):
-            st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
-            st.session_state.visible_history = []
-            st.experimental_rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# 📊 Carrega dados (usado no futuro)
+# 📊 Carrega a planilha (para futuras funcionalidades)
 df = pd.read_csv("dados/data.csv")
 
 # 🧠 Memória da conversa
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 🧾 Histórico visível (exibido no Streamlit)
+# 🧾 Histórico visual da conversa (o que o usuário vê)
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🦗"):
@@ -68,20 +45,21 @@ Fique à vontade, eu explico tudo de forma bem simples! 🌿
 Estou aqui pra conversar! 😄
         """)
 
-# 💬 Mostra histórico anterior
+# 💬 Mostrar histórico anterior
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
     with st.chat_message("assistant", avatar="🦗"):
         st.markdown(bot_msg)
 
-# 🤖 Modelo e cadeia com identidade SAFBot
+# 🤖 Inicializa modelo OpenAI
 llm = ChatOpenAI(
     temperature=0.3,
     model="gpt-4o",
     openai_api_key=openai_key
 )
 
+# 🎯 Prompt com identidade única do SAFBot
 prompt_template = PromptTemplate.from_template("""
 Você é o SAFBot 🌽🦗, um assistente virtual criado especialmente para o projeto **SAF Cristal** — um Sistema Agroflorestal que mistura árvores, cultivos agrícolas e práticas sustentáveis no campo.
 
@@ -101,6 +79,7 @@ Usuário: {input}
 SAFBot:
 """)
 
+# Criação da cadeia de conversa
 conversation = ConversationChain(
     llm=llm,
     prompt=prompt_template,
@@ -108,9 +87,10 @@ conversation = ConversationChain(
     verbose=False
 )
 
-# 🧑‍🌾 Entrada do usuário
+# 🧑‍🌾 Campo de entrada
 query = st.chat_input("Digite aqui sua pergunta sobre o SAF:")
 
+# Se houver nova pergunta
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
@@ -118,9 +98,8 @@ if query:
     with st.spinner("O SAFBot está pensando..."):
         resposta = conversation.run(query)
 
-    # Renderiza APENAS uma vez
     with st.chat_message("assistant", avatar="🦗"):
         st.markdown(resposta)
 
-    # Armazena no histórico visual (sem duplicação!)
+    # Armazenar no histórico visível
     st.session_state.visible_history.append((query, resposta))
