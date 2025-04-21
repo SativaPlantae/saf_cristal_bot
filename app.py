@@ -26,7 +26,7 @@ with st.expander("📊 Visualizar base de dados"):
 
 # Cria o agente LangChain
 llm = ChatOpenAI(temperature=0.2, openai_api_key=openai_key)
-agent = create_pandas_dataframe_agent(llm, df, verbose=False)
+agent = create_pandas_dataframe_agent(llm, df, verbose=False, allow_dangerous_code=True)
 
 # Entrada do usuário
 query = st.text_input("Digite sua pergunta sobre o SAF:")
