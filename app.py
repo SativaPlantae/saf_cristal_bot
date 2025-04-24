@@ -64,7 +64,7 @@ agent = create_pandas_dataframe_agent(
     df=df,
     verbose=False,
     handle_parsing_errors=True,
-    agent_type="openai-tools"
+    allow_dangerous_code=True
 )
 
 # 🧑‍🌾 Campo de entrada
