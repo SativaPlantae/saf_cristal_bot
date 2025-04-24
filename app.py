@@ -3,7 +3,9 @@ import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 
-from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAI
+llm = OpenAI(temperature=0.3, openai_api_key=openai_key)
+
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain.memory import ConversationBufferMemory
 
