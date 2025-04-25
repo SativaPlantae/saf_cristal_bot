@@ -17,8 +17,8 @@ st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
 st.title("🐝 Agente Inteligente do Sítio Cristal")
 st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
 
-# 📊 Carrega planilha
-df = pd.read_csv("dados/data.csv")
+# 📊 Carrega a planilha (corrigido com sep=";")
+df = pd.read_csv("dados/data.csv", sep=";")
 
 # 🧠 Memória de conversa
 if "memory" not in st.session_state:
@@ -55,7 +55,7 @@ for user_msg, bot_msg in st.session_state.visible_history:
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
 llm_agent = OpenAI(temperature=0.3, openai_api_key=openai_key)
 
-# 🐝 Agente com acesso ao DataFrame
+# 📊 Agente com acesso ao DataFrame
 agent = create_pandas_dataframe_agent(
     llm=llm_agent,
     df=df,
@@ -64,14 +64,14 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# 🚀 Cadeia de conversa simples e compatível
+# 🤝 Cadeia de conversa leve
 conversation = ConversationChain(
     llm=llm_chat,
     memory=st.session_state.memory,
     verbose=False
 )
 
-# 🔎 Detecta se a pergunta exige consulta à planilha
+# 🔎 Detecta se deve consultar a planilha
 def pergunta_envia_para_planilha(texto):
     palavras_chave = [
         "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
@@ -95,7 +95,6 @@ if query:
     else:
         resposta_dados = ""
 
-    # ✅ Embute as instruções e resposta no input do modelo
     input_completo = (
         "Você é o SAFBot 🐝, um ajudante virtual do Sítio Cristal. "
         "Explique tudo com simplicidade, simpatia e linguagem acessível. "
