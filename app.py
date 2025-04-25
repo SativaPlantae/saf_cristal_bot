@@ -2,7 +2,6 @@ import os
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
-
 from langchain_openai import ChatOpenAI, OpenAI
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain.memory import ConversationBufferMemory
@@ -17,49 +16,28 @@ st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
 st.title("🐝 Agente Inteligente do Sítio Cristal")
 st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
 
-# 📊 Carrega e prepara os dados
+# 📊 Carrega a planilha
 df = pd.read_csv("dados/data.csv", sep=";")
 
-def parse_currency(value):
-    try:
-        return float(str(value).replace("R$", "").replace(".", "").replace(",", "."))
-    except:
-        return 0.0
-
-df["faturamento (R$)"] = df["faturamento (R$)"].apply(parse_currency)
-df["despesas (R$)"] = df["despesas (R$)"].apply(parse_currency)
-df["lucro (R$)"] = df["lucro (R$)"].apply(parse_currency)
-
-# Calcula totais e médias com base em 15 anos
-total_faturamento = df["faturamento (R$)"].sum()
-numero_anos_saf = 15
-faturamento_medio_anual = total_faturamento / numero_anos_saf
-faturamento_medio_mensal = faturamento_medio_anual / 12
-
-# Adiciona colunas auxiliares para perguntas específicas
-df["faturamento_mensal"] = faturamento_medio_mensal
-
-# 🧠 Memória da conversa
+# 🧠 Memória de conversa
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 🧾 Histórico visual
+# 🧾 Histórico visível
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown("""
 Olá! 😊  
-Eu sou o **SAFBot**, criado especialmente para conversar sobre o projeto agroflorestal do **Sítio Cristal**.  
-Pode me perguntar qualquer coisa sobre espécies plantadas, lucros, tipos de produto ou até mesmo o que é um SAF.  
-Fique à vontade, eu explico tudo de forma bem simples! 🌿
+Eu sou o **SAFBot**, um ajudante do **Sítio Cristal**. Estou aqui pra bater um papo gostoso com você e explicar tudo sobre nosso sistema agroflorestal. 🌱💬  
+Quer saber quais espécies temos? Quanto rendeu um certo ano? Ou o que é exatamente um SAF? Pode perguntar sem medo! Eu explico tudo de um jeito bem simples e direto, como se estivéssemos conversando na varanda. 🐝💛
 
 ---
-
 📌 Exemplos do que você pode perguntar:
-- Qual foi o faturamento total?
-- Quanto gerou por mês, em média?
-- Quais espécies estão produzindo?
+- Quais espécies tem no SAF Cristal?
+- Qual foi o lucro em 2040?
 - O que é um SAF?
+- Como esse sistema ajuda o meio ambiente?
         """)
 
 for user_msg, bot_msg in st.session_state.visible_history:
@@ -68,7 +46,7 @@ for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(bot_msg)
 
-# 🧐 Modelos
+# 🤖 Modelos
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
 llm_agent = OpenAI(temperature=0.3, openai_api_key=openai_key)
 
@@ -81,56 +59,68 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# Conversa informal com memória
-conversation = ConversationChain(
-    llm=llm_chat,
-    memory=st.session_state.memory,
-    verbose=False
-)
+# Funções auxiliares
 
-# 🔍 Classifica a pergunta
+def faturamento_total(df):
+    return df["faturamento (R$)"].sum()
 
-def classificar_tipo_pergunta(texto):
-    texto = texto.lower()
-    if "por mês" in texto or "mensal" in texto:
-        return "mensal"
-    elif "total" in texto or "anual" in texto or "por ano" in texto:
-        return "anual"
-    else:
-        return "geral"
+def lucro_total(df):
+    return df["lucro (R$)"].sum()
 
-query = st.chat_input("Digite aqui sua pergunta sobre o SAF:")
+def despesas_total(df):
+    return df["despesas (R$)"].sum()
+
+def anos_de_duracao(df):
+    return len(df["anos"].unique())
+
+def media_anual(df, coluna):
+    return df.groupby("anos")[coluna].sum().mean()
+
+def media_mensal(df, coluna):
+    return media_anual(df, coluna) / 12
+
+def maior_menor_faturamento(df):
+    faturamento_ano = df.groupby("anos")["faturamento (R$)"].sum()
+    maior = faturamento_ano.idxmax()
+    menor = faturamento_ano.idxmin()
+    return maior, menor
+
+# 🔎 Detecta se deve consultar a planilha
+
+def pergunta_envia_para_planilha(texto):
+    palavras_chave = [
+        "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
+        "qual foi", "em", "faturamento", "quanto gerou", "valores", "total"
+    ]
+    return any(p in texto.lower() for p in palavras_chave)
+
+# Entrada do usuário
+query = st.chat_input("Pode perguntar qualquer coisa sobre o SAF Cristal!")
 
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
-    tipo = classificar_tipo_pergunta(query)
-
-    if tipo == "mensal":
-        resposta_dados = f"O faturamento médio mensal do SAF é de aproximadamente R$ {faturamento_medio_mensal:,.2f}."
-    elif tipo == "anual":
-        if "total" in query:
-            resposta_dados = f"O faturamento total do SAF ao longo dos 15 anos é de R$ {total_faturamento:,.2f}."
-        else:
-            resposta_dados = f"O faturamento médio anual do SAF é de aproximadamente R$ {faturamento_medio_anual:,.2f}."
+    if pergunta_envia_para_planilha(query):
+        with st.spinner("Consultando os dados do Sítio Cristal... 📊"):
+            try:
+                resposta_dados = agent.run(query)
+            except Exception as e:
+                resposta_dados = f"[Ops! Não consegui pegar os dados certos agora: {str(e)}]"
     else:
-        try:
-            resposta_dados = agent.run(query)
-        except Exception as e:
-            resposta_dados = f"[Erro ao consultar os dados: {str(e)}]"
+        resposta_dados = ""
 
     input_completo = (
-        "Você é o SAFBot 🐝, um ajudante virtual do Sítio Cristal. "
-        "Explique tudo com simplicidade, simpatia e linguagem acessível. "
-        "Evite termos técnicos. Responda com base nas informações abaixo, se houver:\n\n"
+        "Você é o SAFBot 🐝, um ajudante do Sítio Cristal. "
+        "Explique tudo com jeitinho simples, sem termos técnicos, como se estivesse conversando com alguém da zona rural. "
+        "Fale de forma acolhedora e use linguagem fácil. Responda com base nisso, e nos dados abaixo, se houver:\n\n"
         f"Pergunta: {query}\n"
         f"{resposta_dados}"
     )
 
-    resposta_final = conversation.run(input_completo)
+    resposta = llm_chat.invoke(input_completo)
 
     with st.chat_message("assistant", avatar="🐝"):
-        st.markdown(resposta_final)
+        st.markdown(resposta)
 
-    st.session_state.visible_history.append((query, resposta_final))
+    st.session_state.visible_history.append((query, resposta))
