@@ -18,7 +18,7 @@ st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
 st.title("🐝 Agente Inteligente do Sítio Cristal")
 st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
 
-# 📊 Carrega a planilha de dados
+# 📊 Carrega a planilha
 df = pd.read_csv("dados/data.csv")
 
 # 🧠 Memória de conversa
@@ -44,8 +44,9 @@ Fique à vontade, eu explico tudo de forma bem simples! 🌿
 - Como esse sistema ajuda o meio ambiente?
 
 Estou aqui pra conversar! 😄
-        """)
+""")
 
+# Exibe o histórico
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
@@ -56,7 +57,7 @@ for user_msg, bot_msg in st.session_state.visible_history:
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
 llm_agent = OpenAI(temperature=0.3, openai_api_key=openai_key)
 
-# 🧠 Agente para análise de planilha
+# 📊 Agente para consulta ao DataFrame
 agent = create_pandas_dataframe_agent(
     llm=llm_agent,
     df=df,
@@ -65,22 +66,14 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# ✏️ Prompt personalizado com estilo SAFBot
+# 🎯 Prompt do SAFBot
 prompt_template = PromptTemplate.from_template("""
 Você é o SAFBot 🐝, um ajudante virtual do Sítio Cristal. Seu papel é conversar com simplicidade, simpatia e bom humor,
 explicando conceitos de SAF e ajudando com dúvidas baseadas nos dados reais do projeto.
 
-Se a pergunta envolver anos, espécies, lucros ou qualquer coisa que possa estar na planilha, use a variável `resposta_dados` para embasar sua explicação.
-Se não houver, apenas converse de forma natural.
-
-Histórico:
-{history}
-
-Pergunta: {input}
-Resposta (no estilo SAFBot, com base na variável `resposta_dados`, se existir):
+Use linguagem acessível e evite termos técnicos. Responda de forma acolhedora e clara.
 """)
 
-# 🧠 Cadeia de conversa com memória
 conversation = ConversationChain(
     llm=llm_chat,
     prompt=prompt_template,
@@ -88,10 +81,10 @@ conversation = ConversationChain(
     verbose=False
 )
 
-# 🔎 Detecta se a pergunta deve consultar a planilha
+# 🔎 Detecta se deve consultar a planilha
 def pergunta_envia_para_planilha(texto):
     palavras_chave = [
-        "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos", 
+        "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
         "qual foi", "em", "faturamento", "quanto gerou", "valores"
     ]
     return any(p in texto.lower() for p in palavras_chave)
@@ -103,18 +96,23 @@ if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
-    # Se precisar, consulta a planilha
+    # Verifica se é uma pergunta que precisa consultar dados
     if pergunta_envia_para_planilha(query):
         with st.spinner("Consultando a planilha do SAF Cristal... 📊"):
             try:
                 resposta_dados = agent.run(query)
             except Exception as e:
-                resposta_dados = f"Opa! Tive um probleminha lendo os dados: {str(e)}"
+                resposta_dados = f"[Erro ao consultar os dados: {str(e)}]"
     else:
         resposta_dados = ""
 
-    # Gera resposta do SAFBot com contexto
-    resposta = conversation.run({"input": query, "resposta_dados": resposta_dados})
+    # Combina a pergunta com a resposta dos dados
+    input_completo = query
+    if resposta_dados:
+        input_completo += f"\n\n[Informações da planilha]: {resposta_dados}"
+
+    # Gera resposta
+    resposta = conversation.run(input_completo)
 
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
