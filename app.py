@@ -95,14 +95,15 @@ if query:
         f"{resposta_dados}"
     )
 
-    resposta = st.session_state.memory.chat_memory.messages[-1].content if resposta_dados.strip() == "" else resposta_dados
-
-    if not resposta_dados.strip():
-        resposta = ConversationChain(
+    if resposta_dados.strip() == "":
+        conversation = ConversationChain(
             llm=llm_chat,
             memory=st.session_state.memory,
             verbose=False
-        ).run(input_completo)
+        )
+        resposta = conversation.run(input_completo)
+    else:
+        resposta = resposta_dados
 
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
