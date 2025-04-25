@@ -17,14 +17,26 @@ st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
 st.title("🐝 Agente Inteligente do Sítio Cristal")
 st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
 
-# 📊 Carrega a planilha (corrigido com sep=";")
+# 📊 Carrega e trata a planilha
 df = pd.read_csv("dados/data.csv", sep=";")
 
-# 🧠 Memória de conversa
+# 🔍 Limpa colunas de valores monetários
+colunas_valores = ["despesas (R$)", "faturamento (R$)", "lucro (R$)", "preco (R$)"]
+for col in colunas_valores:
+    df[col] = (
+        df[col]
+        .astype(str)
+        .str.replace("R\\$", "", regex=True)
+        .str.replace(".", "", regex=False)
+        .str.replace(",", ".", regex=False)
+        .astype(float)
+    )
+
+# 🧠 Memória da conversa
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 🧾 Histórico visível
+# 🧾 Histórico exibido
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
@@ -64,18 +76,18 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# 🤝 Cadeia de conversa leve
+# 💬 Cadeia de conversa leve
 conversation = ConversationChain(
     llm=llm_chat,
     memory=st.session_state.memory,
     verbose=False
 )
 
-# 🔎 Detecta se deve consultar a planilha
+# 🔎 Detecta se a pergunta exige leitura dos dados
 def pergunta_envia_para_planilha(texto):
     palavras_chave = [
         "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
-        "qual foi", "em", "faturamento", "quanto gerou", "valores"
+        "qual foi", "em", "faturamento", "quanto gerou", "valores", "maior", "menor"
     ]
     return any(p in texto.lower() for p in palavras_chave)
 
@@ -95,6 +107,7 @@ if query:
     else:
         resposta_dados = ""
 
+    # Junta instrução + dados da planilha
     input_completo = (
         "Você é o SAFBot 🐝, um ajudante virtual do Sítio Cristal. "
         "Explique tudo com simplicidade, simpatia e linguagem acessível. "
