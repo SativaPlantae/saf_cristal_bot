@@ -118,7 +118,7 @@ if query:
         f"{resposta_dados}"
     )
 
-    resposta = llm_chat.invoke(input_completo)
+    resposta = llm_chat.invoke(input_completo).content
 
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
