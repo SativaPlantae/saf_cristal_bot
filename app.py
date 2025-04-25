@@ -4,8 +4,6 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from langchain_openai import OpenAI
-llm = OpenAI(temperature=0.3, openai_api_key=openai_key)
-
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain.memory import ConversationBufferMemory
 
@@ -46,21 +44,20 @@ Fique à vontade, eu explico tudo de forma bem simples! 🌿
 Estou aqui pra conversar! 😄
         """)
 
-# 💬 Mostra o histórico anterior
+# 💬 Mostrar histórico da conversa
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(bot_msg)
 
-# 🤖 Inicializa modelo OpenAI
-llm = ChatOpenAI(
+# 🤖 Inicializa modelo OpenAI (modelo não-chat para agentes)
+llm = OpenAI(
     temperature=0.3,
-    model="gpt-4o",
     openai_api_key=openai_key
 )
 
-# 🧠 Cria o agente com base no DataFrame
+# 🎯 Cria o agente com acesso ao DataFrame
 agent = create_pandas_dataframe_agent(
     llm=llm,
     df=df,
@@ -69,10 +66,10 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# 🧑‍🌾 Campo de entrada
+# 🧑‍🌾 Entrada do usuário
 query = st.chat_input("Digite aqui sua pergunta sobre o SAF:")
 
-# Processa a pergunta
+# Processa pergunta
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
@@ -86,5 +83,5 @@ if query:
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
 
-    # Salva o histórico para exibição
+    # Armazena o histórico visível
     st.session_state.visible_history.append((query, resposta))
