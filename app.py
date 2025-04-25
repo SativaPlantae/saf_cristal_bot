@@ -19,8 +19,6 @@ st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como 
 
 # 📊 Carrega e prepara os dados
 df = pd.read_csv("dados/data.csv", sep=";")
-
-# 📆 Cria colunas mensais com base em valores anuais
 df["despesas_mensal"] = df["despesas (R$)"] / 12
 df["faturamento_mensal"] = df["faturamento (R$)"] / 12
 df["lucro_mensal"] = df["lucro (R$)"] / 12
@@ -42,10 +40,9 @@ Fique à vontade, eu explico tudo de forma bem simples! 🌿
 ---
 
 📌 Exemplos do que você pode perguntar:
-- Quais espécies tem no SAF Cristal?
-- Qual foi o lucro em 2040?
-- Qual o faturamento médio mensal?
-- Quanto se gasta por mês?
+- Qual foi o faturamento mensal em 2028?
+- Quanto foi o lucro anual em 2040?
+- Quais espécies estão produzindo?
 - Como esse sistema ajuda o meio ambiente?
 
 Estou aqui pra conversar! 😄
@@ -62,7 +59,7 @@ for user_msg, bot_msg in st.session_state.visible_history:
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
 llm_agent = OpenAI(temperature=0.3, openai_api_key=openai_key)
 
-# 📊 Agente de análise com DataFrame
+# 📊 Agente com acesso ao DataFrame
 agent = create_pandas_dataframe_agent(
     llm=llm_agent,
     df=df,
@@ -71,38 +68,50 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# Conversa geral com memória
-conversation = ConversationChain(
-    llm=llm_chat,
-    memory=st.session_state.memory,
-    verbose=False
-)
-
-# 🔎 Detecta se deve consultar dados do SAF
-def pergunta_envia_para_planilha(texto):
-    palavras_chave = [
+# 💡 Classificação da pergunta
+def classificar_tipo_pergunta(texto):
+    texto = texto.lower()
+    if any(p in texto for p in ["mensal", "por mês", "mensalmente"]):
+        return "mensal"
+    elif any(p in texto for p in [
         "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
-        "qual foi", "em", "faturamento", "mensal", "quanto gerou", "valores",
-        "maior", "menor", "despesas", "gastos", "mensalmente", "por mês"
-    ]
-    return any(p in texto.lower() for p in palavras_chave)
+        "qual foi", "em", "faturamento", "quanto gerou", "valores",
+        "maior", "menor", "despesas", "gastos"
+    ]):
+        return "geral"
+    else:
+        return "conversa"
 
-# 🧑‍🌾 Entrada do usuário
+# Entrada do usuário
 query = st.chat_input("Digite aqui sua pergunta sobre o SAF:")
 
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
-    if pergunta_envia_para_planilha(query):
-        with st.spinner("Consultando a planilha do SAF Cristal... 📊"):
+    tipo = classificar_tipo_pergunta(query)
+
+    if tipo == "mensal":
+        with st.spinner("Consultando valores mensais do SAF... 📊"):
+            try:
+                query_mensal = (
+                    query.replace("lucro", "lucro_mensal")
+                         .replace("faturamento", "faturamento_mensal")
+                         .replace("despesas", "despesas_mensal")
+                )
+                resposta_dados = agent.run(query_mensal)
+            except Exception as e:
+                resposta_dados = f"[Erro ao consultar dados mensais: {str(e)}]"
+    elif tipo == "geral":
+        with st.spinner("Consultando dados do SAF... 📊"):
             try:
                 resposta_dados = agent.run(query)
             except Exception as e:
-                resposta_dados = f"[Erro ao consultar os dados: {str(e)}]"
+                resposta_dados = f"[Erro ao consultar dados gerais: {str(e)}]"
     else:
         resposta_dados = ""
 
+    # Resposta final
     input_completo = (
         "Você é o SAFBot 🐝, um ajudante virtual do Sítio Cristal. "
         "Explique tudo com simplicidade, simpatia e linguagem acessível. "
