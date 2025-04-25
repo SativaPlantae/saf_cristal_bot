@@ -68,6 +68,13 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
+# Conversa informal com memória
+conversation = ConversationChain(
+    llm=llm_chat,
+    memory=st.session_state.memory,
+    verbose=False
+)
+
 # 💡 Classificação da pergunta
 def classificar_tipo_pergunta(texto):
     texto = texto.lower()
@@ -111,7 +118,6 @@ if query:
     else:
         resposta_dados = ""
 
-    # Resposta final
     input_completo = (
         "Você é o SAFBot 🐝, um ajudante virtual do Sítio Cristal. "
         "Explique tudo com simplicidade, simpatia e linguagem acessível. "
