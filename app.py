@@ -3,10 +3,10 @@ import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 
-from langchain_openai import ChatOpenAI, OpenAI
-from langchain_experimental.agents import create_pandas_dataframe_agent
+from langchain_openai import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationChain
 
 # 🌿 Carrega variáveis de ambiente
 load_dotenv()
@@ -14,121 +14,76 @@ openai_key = os.getenv("OPENAI_API_KEY")
 
 # 🌱 Configuração da página
 st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
-st.title("🐝 Agente Inteligente do Sítio Cristal")
-st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
+st.title("🦗 Agente Inteligente do Sítio Cristal")
+st.markdown("Converse com o agente sobre os dados do SAF. Pode perguntar como se fosse pra um amigo — ele fala a sua língua!")
 
-# 📊 Carrega e prepara os dados
-df = pd.read_csv("dados/data.csv", sep=";")
-df["despesas_mensal"] = df["despesas (R$)"] / 12
-df["faturamento_mensal"] = df["faturamento (R$)"] / 12
-df["lucro_mensal"] = df["lucro (R$)"] / 12
+# 📊 Carrega a planilha
+df = pd.read_csv("dados/data.csv")
 
-# 🧠 Memória da conversa
+# 🔁 Inicializa histórico se ainda não existir
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 if "memory" not in st.session_state:
-    st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
+    st.session_state.memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
-# 🧾 Histórico visual
-if "visible_history" not in st.session_state:
-    st.session_state.visible_history = []
-    with st.chat_message("assistant", avatar="🐝"):
+# 👋 Mensagem de boas-vindas
+if len(st.session_state.chat_history) == 0:
+    with st.chat_message("assistant", avatar="🦗"):
         st.markdown("""
 Olá! 😊  
-Eu sou o **SAFBot**, criado especialmente para conversar sobre o projeto agroflorestal do **Sítio Cristal**.  
-Pode me perguntar qualquer coisa sobre espécies plantadas, lucros, tipos de produto ou até mesmo o que é um SAF.  
-Fique à vontade, eu explico tudo de forma bem simples! 🌿
+Eu sou o **SAFBot**, seu ajudante aqui no Sítio Cristal 🌽  
+Pode me perguntar qualquer coisa sobre o projeto agroflorestal — desde o que está sendo produzido até como tudo funciona.  
+Prometo responder sem enrolação, de um jeito fácil de entender. Vamos nessa? 🌱
+""")
 
----
+# 🧠 Prompt natural e amigável com memória
+prompt_template = PromptTemplate.from_template("""
+Você é o SAFBot, um assistente simpático que responde com carinho, sem termos técnicos.
+Explique de forma simples, como se estivesse conversando com alguém da zona rural que nunca ouviu falar de SAF ou IA.
+Use o contexto da conversa para continuar respondendo de forma natural e acolhedora.
 
-📌 Exemplos do que você pode perguntar:
-- Qual foi o faturamento mensal em 2028?
-- Quanto foi o lucro anual em 2040?
-- Quais espécies estão produzindo?
-- Como esse sistema ajuda o meio ambiente?
+Histórico:
+{chat_history}
 
-Estou aqui pra conversar! 😄
-        """)
+Pergunta: {pergunta}
+""")
 
-# 💬 Mostrar histórico
-for user_msg, bot_msg in st.session_state.visible_history:
-    with st.chat_message("user", avatar="🧑‍🌾"):
-        st.markdown(user_msg)
-    with st.chat_message("assistant", avatar="🐝"):
-        st.markdown(bot_msg)
-
-# 🤖 Modelos
-llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
-llm_agent = OpenAI(temperature=0.3, openai_api_key=openai_key)
-
-# 📊 Agente com acesso ao DataFrame
-agent = create_pandas_dataframe_agent(
-    llm=llm_agent,
-    df=df,
-    verbose=False,
-    handle_parsing_errors=True,
-    allow_dangerous_code=True
+# 🤖 Inicializa modelo e cadeia com memória
+llm = ChatOpenAI(
+    temperature=0.2,
+    model="gpt-4o",
+    openai_api_key=openai_key
 )
 
-# Conversa informal com memória
-conversation = ConversationChain(
-    llm=llm_chat,
+chain = LLMChain(
+    llm=llm,
+    prompt=prompt_template,
     memory=st.session_state.memory,
     verbose=False
 )
 
-# 💡 Classificação da pergunta
-def classificar_tipo_pergunta(texto):
-    texto = texto.lower()
-    if any(p in texto for p in ["mensal", "por mês", "mensalmente"]):
-        return "mensal"
-    elif any(p in texto for p in [
-        "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
-        "qual foi", "em", "faturamento", "quanto gerou", "valores",
-        "maior", "menor", "despesas", "gastos"
-    ]):
-        return "geral"
-    else:
-        return "conversa"
-
 # Entrada do usuário
-query = st.chat_input("Digite aqui sua pergunta sobre o SAF:")
+query = st.chat_input("O que você quer saber sobre o SAF?")
 
+# Exibe o histórico anterior
+for user_msg, bot_msg in st.session_state.chat_history:
+    with st.chat_message("user", avatar="🧑‍🌾"):
+        st.markdown(user_msg)
+    with st.chat_message("assistant", avatar="🦗"):
+        st.markdown(bot_msg)
+
+# Se houver nova pergunta
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
-    tipo = classificar_tipo_pergunta(query)
-
-    if tipo == "mensal":
-        with st.spinner("Consultando valores mensais do SAF... 📊"):
+    with st.chat_message("assistant", avatar="🦗"):
+        with st.spinner("Consultando os dados e lembranças do SAFBot..."):
             try:
-                query_mensal = (
-                    query.replace("lucro", "lucro_mensal")
-                         .replace("faturamento", "faturamento_mensal")
-                         .replace("despesas", "despesas_mensal")
-                )
-                resposta_dados = agent.run(query_mensal)
+                resposta = chain.run(pergunta=query)
             except Exception as e:
-                resposta_dados = f"[Erro ao consultar dados mensais: {str(e)}]"
-    elif tipo == "geral":
-        with st.spinner("Consultando dados do SAF... 📊"):
-            try:
-                resposta_dados = agent.run(query)
-            except Exception as e:
-                resposta_dados = f"[Erro ao consultar dados gerais: {str(e)}]"
-    else:
-        resposta_dados = ""
-
-    input_completo = (
-        "Você é o SAFBot 🐝, um ajudante virtual do Sítio Cristal. "
-        "Explique tudo com simplicidade, simpatia e linguagem acessível. "
-        "Evite termos técnicos. Responda com base nas informações abaixo, se houver:\n\n"
-        f"Pergunta: {query}\n"
-        f"{resposta_dados}"
-    )
-
-    resposta = conversation.run(input_completo)
-
-    with st.chat_message("assistant", avatar="🐝"):
+                resposta = f"❌ Ocorreu um erro: {e}"
         st.markdown(resposta)
 
-    st.session_state.visible_history.append((query, resposta))
+    # Atualiza o histórico visível
+    st.session_state.chat_history.append((query, resposta))
