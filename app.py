@@ -17,26 +17,19 @@ st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
 st.title("🐝 Agente Inteligente do Sítio Cristal")
 st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
 
-# 📊 Carrega e trata a planilha
+# 📊 Carrega e prepara os dados
 df = pd.read_csv("dados/data.csv", sep=";")
 
-# 🔍 Limpa colunas de valores monetários
-colunas_valores = ["despesas (R$)", "faturamento (R$)", "lucro (R$)", "preco (R$)"]
-for col in colunas_valores:
-    df[col] = (
-        df[col]
-        .astype(str)
-        .str.replace("R\\$", "", regex=True)
-        .str.replace(".", "", regex=False)
-        .str.replace(",", ".", regex=False)
-        .astype(float)
-    )
+# 📆 Cria colunas mensais com base em valores anuais
+df["despesas_mensal"] = df["despesas (R$)"] / 12
+df["faturamento_mensal"] = df["faturamento (R$)"] / 12
+df["lucro_mensal"] = df["lucro (R$)"] / 12
 
 # 🧠 Memória da conversa
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 🧾 Histórico exibido
+# 🧾 Histórico visual
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
@@ -51,12 +44,14 @@ Fique à vontade, eu explico tudo de forma bem simples! 🌿
 📌 Exemplos do que você pode perguntar:
 - Quais espécies tem no SAF Cristal?
 - Qual foi o lucro em 2040?
-- O que é um SAF?
+- Qual o faturamento médio mensal?
+- Quanto se gasta por mês?
 - Como esse sistema ajuda o meio ambiente?
 
 Estou aqui pra conversar! 😄
         """)
 
+# 💬 Mostrar histórico
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
@@ -67,7 +62,7 @@ for user_msg, bot_msg in st.session_state.visible_history:
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
 llm_agent = OpenAI(temperature=0.3, openai_api_key=openai_key)
 
-# 📊 Agente com acesso ao DataFrame
+# 📊 Agente de análise com DataFrame
 agent = create_pandas_dataframe_agent(
     llm=llm_agent,
     df=df,
@@ -76,22 +71,23 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# 💬 Cadeia de conversa leve
+# Conversa geral com memória
 conversation = ConversationChain(
     llm=llm_chat,
     memory=st.session_state.memory,
     verbose=False
 )
 
-# 🔎 Detecta se a pergunta exige leitura dos dados
+# 🔎 Detecta se deve consultar dados do SAF
 def pergunta_envia_para_planilha(texto):
     palavras_chave = [
         "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
-        "qual foi", "em", "faturamento", "quanto gerou", "valores", "maior", "menor"
+        "qual foi", "em", "faturamento", "mensal", "quanto gerou", "valores",
+        "maior", "menor", "despesas", "gastos", "mensalmente", "por mês"
     ]
     return any(p in texto.lower() for p in palavras_chave)
 
-# Entrada do usuário
+# 🧑‍🌾 Entrada do usuário
 query = st.chat_input("Digite aqui sua pergunta sobre o SAF:")
 
 if query:
@@ -107,7 +103,6 @@ if query:
     else:
         resposta_dados = ""
 
-    # Junta instrução + dados da planilha
     input_completo = (
         "Você é o SAFBot 🐝, um ajudante virtual do Sítio Cristal. "
         "Explique tudo com simplicidade, simpatia e linguagem acessível. "
