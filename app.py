@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAI
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationChain
+from langchain.schema import AIMessage, HumanMessage
 
 # 🌿 Carrega variáveis de ambiente
 load_dotenv()
@@ -114,14 +114,18 @@ if query:
         "Você é o SAFBot 🐝, um ajudante do Sítio Cristal. "
         "Explique tudo com jeitinho simples, sem termos técnicos, como se estivesse conversando com alguém da zona rural. "
         "Fale de forma acolhedora e use linguagem fácil. Responda com base nisso, e nos dados abaixo, se houver:\n\n"
-        f"Pergunta: {query}\n"
-        f"{resposta_dados}"
+        f"{resposta_dados}\n\n"
+        f"Pergunta do usuário: {query}"
     )
 
-    resposta = llm_chat.invoke(input_completo)
+    resposta_obj = llm_chat.invoke(
+        st.session_state.memory.load_memory_variables({})["history"] + [HumanMessage(content=input_completo)]
+    )
+
+    resposta = resposta_obj.content.strip() if hasattr(resposta_obj, "content") else str(resposta_obj)
 
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
 
     st.session_state.visible_history.append((query, resposta))
-
+    st.session_state.memory.save_context({"input": query}, {"output": resposta})
