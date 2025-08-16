@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
+import re
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAI
 from langchain_experimental.agents import create_pandas_dataframe_agent
@@ -16,8 +17,8 @@ st.set_page_config(page_title="Cristal Farm AI Agent 🌱", layout="wide")
 st.title("🐝 Cristal Farm — AI Assistant")
 st.markdown("Chat with the assistant about the SAF data. Clear, simple answers — like a friendly porch conversation!")
 
-# 📊 Load spreadsheet
-df = pd.read_csv("dados/data.csv", sep=";")
+# 📊 Load spreadsheet (note: your GitHub repo shows data_2.csv)
+df = pd.read_csv("dados/data_2.csv", sep=";")
 
 # 🧠 Conversation memory
 if "memory" not in st.session_state:
@@ -59,15 +60,44 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# Helper functions (keep column names as they are in the CSV)
+# ===== COLUMN/KEYWORD TRANSLATOR =====
+column_alias = {
+    "species": "especies",
+    "type": "tipo",
+    "years": "anos",
+    "expenses": "despesas",
+    "revenue": "faturamento",
+    "profit": "lucro",
+    "individuals": "individuos",
+    "price": "preco",
+    "product": "produto",
+    "producing": "esta_produzindo"
+}
+
+# Optional: species translation (add as needed)
+species_alias = {
+    "corn": "Milho",
+    "andiroba": "Andiroba"
+}
+
+def translate_query(query: str) -> str:
+    # Replace column names
+    for en, pt in column_alias.items():
+        query = re.sub(rf"\b{en}\b", pt, query, flags=re.IGNORECASE)
+    # Replace species names
+    for en, pt in species_alias.items():
+        query = re.sub(rf"\b{en}\b", pt, query, flags=re.IGNORECASE)
+    return query
+
+# ===== HELPER FUNCTIONS (columns in PT remain unchanged) =====
 def faturamento_total(df):
-    return df["faturamento (R$)"].sum()
+    return df["faturamento"].sum()
 
 def lucro_total(df):
-    return df["lucro (R$)"].sum()
+    return df["lucro"].sum()
 
 def despesas_total(df):
-    return df["despesas (R$)"].sum()
+    return df["despesas"].sum()
 
 def anos_de_duracao(df):
     return len(df["anos"].unique())
@@ -79,7 +109,7 @@ def media_mensal(df, coluna):
     return media_anual(df, coluna) / 12
 
 def maior_menor_faturamento(df):
-    faturamento_ano = df.groupby("anos")["faturamento (R$)"].sum()
+    faturamento_ano = df.groupby("anos")["faturamento"].sum()
     maior = faturamento_ano.idxmax()
     menor = faturamento_ano.idxmin()
     return maior, menor
@@ -90,14 +120,14 @@ def pergunta_envia_para_planilha(texto: str) -> bool:
         # EN
         "profit", "revenue", "income", "species", "producing", "production", "years",
         "how many", "which year", "turnover", "how much", "values", "total",
-        # PT (keep for bilingual robustness)
+        # PT
         "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
         "qual foi", "faturamento", "quanto gerou", "valores", "total"
     ]
     t = texto.lower()
     return any(k in t for k in keywords_en_pt)
 
-# User input
+# ===== USER INPUT =====
 query = st.chat_input("Ask anything about Cristal Farm’s SAF!")
 
 if query:
@@ -107,7 +137,9 @@ if query:
     if pergunta_envia_para_planilha(query):
         with st.spinner("Checking Cristal Farm data... 📊"):
             try:
-                resposta_dados = agent.run(query)
+                # Translate query keywords before sending
+                query_translated = translate_query(query)
+                resposta_dados = agent.run(query_translated)
             except Exception as e:
                 resposta_dados = f"[Oops! I couldn’t fetch the data right now: {str(e)}]"
     else:
