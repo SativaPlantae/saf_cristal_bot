@@ -1,12 +1,12 @@
 import os
+import re
 import streamlit as st
 import pandas as pd
-import re
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAI
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain.memory import ConversationBufferMemory
-from langchain.schema import AIMessage, HumanMessage
+from langchain.schema import HumanMessage
 
 # 🌿 Load env vars
 load_dotenv()
@@ -17,7 +17,7 @@ st.set_page_config(page_title="Cristal Farm AI Agent 🌱", layout="wide")
 st.title("🐝 Cristal Farm — AI Assistant")
 st.markdown("Chat with the assistant about the SAF data. Clear, simple answers — like a friendly porch conversation!")
 
-# 📊 Load spreadsheet (note: your GitHub repo shows data_2.csv)
+# 📊 Load spreadsheet (kept in Portuguese on GitHub)
 df = pd.read_csv("dados/data_2.csv", sep=";")
 
 # 🧠 Conversation memory
@@ -60,56 +60,134 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# ===== COLUMN/KEYWORD TRANSLATOR =====
+# =========================
+# 🔁 TWO-WAY TRANSLATOR
+# =========================
+
+# Column mapping (EN -> PT)
 column_alias = {
-    "species": "especies",
     "type": "tipo",
     "years": "anos",
+    "year": "anos",
+    "species": "especies",
+    "producing": "esta_produzindo",
     "expenses": "despesas",
     "revenue": "faturamento",
     "profit": "lucro",
     "individuals": "individuos",
     "price": "preco",
     "product": "produto",
-    "producing": "esta_produzindo"
 }
 
-# Optional: species translation (add as needed)
-species_alias = {
+# Value mapping per field (EN -> PT)
+value_alias_en_to_pt = {
+    # tipo
+    "agricultural": "Agrícola",
+    "forestry": "Florestal",
+    "fruit-bearing": "Frutífera",
+    # esta_produzindo
+    "yes": "Sim",
+    "no": "Não",
+    # especies
+    "açaí": "Açaí",
+    "acai": "Açaí",
+    "andiroba": "Andiroba",
+    "banana": "Banana",
+    "cacao": "Cacau",
+    "cocoa": "Cacau",
+    "coconut palm": "Coqueiro",
+    "coconut": "Coqueiro",
+    "cupuaçu": "Cupuçu",
+    "cupuuçu": "Cupuçu",
+    "cupuuco": "Cupuçu",
+    "cupuaçu ": "Cupuçu",
+    "papaya": "Mamão",
     "corn": "Milho",
-    "andiroba": "Andiroba"
+    "mahogany": "Mogno",
+    # produto
+    "fruit": "Fruto",
+    "wood": "Madeira",
+    "corn cake": "Pamonha",
+    "pulp": "Polpa",
+    "juice": "Suco",
 }
 
-def translate_query(query: str) -> str:
-    # Replace column names
-    for en, pt in column_alias.items():
-        query = re.sub(rf"\b{en}\b", pt, query, flags=re.IGNORECASE)
-    # Replace species names
-    for en, pt in species_alias.items():
-        query = re.sub(rf"\b{en}\b", pt, query, flags=re.IGNORECASE)
-    return query
+# PT -> EN (reverse)
+value_alias_pt_to_en = {
+    # tipo
+    "Agrícola": "Agricultural",
+    "Florestal": "Forestry",
+    "Frutífera": "Fruit-bearing",
+    # esta_produzindo
+    "Sim": "Yes",
+    "Não": "No",
+    # especies
+    "Açaí": "Açaí",
+    "Andiroba": "Andiroba",
+    "Banana": "Banana",
+    "Cacau": "Cacao",
+    "Coqueiro": "Coconut Palm",
+    "Cupuçu": "Cupuaçu",
+    "Mamão": "Papaya",
+    "Milho": "Corn",
+    "Mogno": "Mahogany",
+    # produto
+    "Fruto": "Fruit",
+    "Madeira": "Wood",
+    "Pamonha": "Corn Cake",
+    "Polpa": "Pulp",
+    "Suco": "Juice",
+}
 
-# ===== HELPER FUNCTIONS (columns in PT remain unchanged) =====
-def faturamento_total(df):
-    return df["faturamento"].sum()
+def _regex_replace_words(text: str, mapping: dict, case_insensitive=True):
+    """Replace whole words using a mapping dict with regex boundaries."""
+    flags = re.IGNORECASE if case_insensitive else 0
+    # Sort by length to replace longer phrases first (avoid partial overlaps)
+    for k in sorted(mapping.keys(), key=len, reverse=True):
+        pattern = r"\b" + re.escape(k) + r"\b"
+        text = re.sub(pattern, mapping[k], text, flags=flags)
+    return text
 
-def lucro_total(df):
-    return df["lucro"].sum()
+def translate_query_to_pt(query: str) -> str:
+    """Map English column names and English value tokens to Portuguese before sending to the agent."""
+    q = query
+    # Columns
+    q = _regex_replace_words(q, column_alias, case_insensitive=True)
+    # Values
+    q = _regex_replace_words(q, value_alias_en_to_pt, case_insensitive=True)
+    return q
 
-def despesas_total(df):
-    return df["despesas"].sum()
+def translate_text_pt_to_en(text: str) -> str:
+    """Translate common Portuguese values back to English in the agent's output."""
+    if not isinstance(text, str):
+        return text
+    return _regex_replace_words(text, value_alias_pt_to_en, case_insensitive=False)
 
-def anos_de_duracao(df):
-    return len(df["anos"].unique())
+# =========================
+# Helper functions (PT cols)
+# =========================
+def faturamento_total(df_):
+    # If currency strings are present (e.g., 'R$ 66.360,00'), leave numeric parsing to the agent as needed
+    return df_["faturamento"].sum() if "faturamento" in df_.columns else df_["faturamento (R$)"].sum()
 
-def media_anual(df, coluna):
-    return df.groupby("anos")[coluna].sum().mean()
+def lucro_total(df_):
+    return df_["lucro"].sum()
 
-def media_mensal(df, coluna):
-    return media_anual(df, coluna) / 12
+def despesas_total(df_):
+    return df_["despesas"].sum()
 
-def maior_menor_faturamento(df):
-    faturamento_ano = df.groupby("anos")["faturamento"].sum()
+def anos_de_duracao(df_):
+    return len(df_["anos"].unique())
+
+def media_anual(df_, coluna):
+    return df_.groupby("anos")[coluna].sum().mean()
+
+def media_mensal(df_, coluna):
+    return media_anual(df_, coluna) / 12
+
+def maior_menor_faturamento(df_):
+    col = "faturamento" if "faturamento" in df_.columns else "faturamento (R$)"
+    faturamento_ano = df_.groupby("anos")[col].sum()
     maior = faturamento_ano.idxmax()
     menor = faturamento_ano.idxmin()
     return maior, menor
@@ -119,10 +197,12 @@ def pergunta_envia_para_planilha(texto: str) -> bool:
     keywords_en_pt = [
         # EN
         "profit", "revenue", "income", "species", "producing", "production", "years",
-        "how many", "which year", "turnover", "how much", "values", "total",
+        "how many", "which year", "turnover", "how much", "values", "total", "type",
+        "individuals", "price", "product",
         # PT
-        "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
-        "qual foi", "faturamento", "quanto gerou", "valores", "total"
+        "lucro", "renda", "espécies", "especies", "produzindo", "produção", "anos",
+        "quantos", "qual foi", "faturamento", "quanto gerou", "valores", "total",
+        "tipo", "individuos", "preco", "produto"
     ]
     t = texto.lower()
     return any(k in t for k in keywords_en_pt)
@@ -137,14 +217,17 @@ if query:
     if pergunta_envia_para_planilha(query):
         with st.spinner("Checking Cristal Farm data... 📊"):
             try:
-                # Translate query keywords before sending
-                query_translated = translate_query(query)
-                resposta_dados = agent.run(query_translated)
+                # Translate query EN -> PT before sending to the agent
+                query_pt = translate_query_to_pt(query)
+                resposta_dados = agent.run(query_pt)
+                # Translate any PT tokens in the agent's raw data reply back to EN
+                resposta_dados = translate_text_pt_to_en(resposta_dados)
             except Exception as e:
                 resposta_dados = f"[Oops! I couldn’t fetch the data right now: {str(e)}]"
     else:
         resposta_dados = ""
 
+    # Build the assistant instruction
     input_completo = (
         "You are SAFBot 🐝, a helper from Cristal Farm. "
         "Explain things in a warm, simple way without technical jargon — like talking with someone from the countryside. "
@@ -153,11 +236,14 @@ if query:
         f"User question: {query}"
     )
 
+    # Run chat model with memory
     resposta_obj = llm_chat.invoke(
         st.session_state.memory.load_memory_variables({})["history"] + [HumanMessage(content=input_completo)]
     )
 
     resposta = resposta_obj.content.strip() if hasattr(resposta_obj, "content") else str(resposta_obj)
+    # Final safety pass: translate any remaining PT tokens to EN in the final message
+    resposta = translate_text_pt_to_en(resposta)
 
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
