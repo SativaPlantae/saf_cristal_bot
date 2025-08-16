@@ -7,37 +7,37 @@ from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import AIMessage, HumanMessage
 
-# 🌿 Carrega variáveis de ambiente
+# 🌿 Load env vars
 load_dotenv()
 openai_key = os.getenv("OPENAI_API_KEY")
 
-# 🌱 Configuração da página
-st.set_page_config(page_title="Agente SAF Cristal 🌱", layout="wide")
-st.title("🐝 Agente Inteligente do Sítio Cristal")
-st.markdown("Converse com o agente sobre os dados do SAF. Ele fala fácil, como quem troca ideia na varanda!")
+# 🌱 Page config
+st.set_page_config(page_title="Sítio Cristal AI Agent 🌱", layout="wide")
+st.title("🐝 Sítio Cristal — AI Assistant")
+st.markdown("Chat with the assistant about the SAF data. Clear, simple answers — like a friendly porch conversation!")
 
-# 📊 Carrega a planilha
+# 📊 Load spreadsheet
 df = pd.read_csv("dados/data.csv", sep=";")
 
-# 🧠 Memória de conversa
+# 🧠 Conversation memory
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 🧾 Histórico visível
+# 🧾 Visible history + welcome message
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown("""
-Olá! 😊  
-Eu sou o **SAFBot**, um ajudante do **Sítio Cristal**. Estou aqui pra bater um papo gostoso com você e explicar tudo sobre nosso sistema agroflorestal. 🌱💬  
-Quer saber quais espécies temos? Quanto rendeu um certo ano? Ou o que é exatamente um SAF? Pode perguntar sem medo! Eu explico tudo de um jeito bem simples e direto, como se estivéssemos conversando na varanda. 🐝💛
+Hello! 😊  
+I’m **SAFBot**, a helper from **Sítio Cristal**. I’m here to chat with you and explain everything about our agroforestry system. 🌱💬  
+Want to know which species we have? How much a certain year yielded? Or what exactly an SAF is? Ask away — I’ll keep it simple and direct, like we’re talking on the porch. 🐝💛
 
 ---
-📌 Exemplos do que você pode perguntar:
-- Quais espécies tem no SAF Cristal?
-- Qual foi o lucro em 2040?
-- O que é um SAF?
-- Como esse sistema ajuda o meio ambiente?
+📌 Examples you can ask:
+- Which species are in SAF Cristal?
+- What was the profit in 2040?
+- What is an SAF?
+- How does this system help the environment?
         """)
 
 for user_msg, bot_msg in st.session_state.visible_history:
@@ -46,11 +46,11 @@ for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(bot_msg)
 
-# 🤖 Modelos
+# 🤖 Models
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
 llm_agent = OpenAI(temperature=0.3, openai_api_key=openai_key)
 
-# 📊 Agente com acesso ao DataFrame
+# 📊 Agent with DataFrame access
 agent = create_pandas_dataframe_agent(
     llm=llm_agent,
     df=df,
@@ -59,8 +59,7 @@ agent = create_pandas_dataframe_agent(
     allow_dangerous_code=True
 )
 
-# Funções auxiliares
-
+# Helper functions (keep column names as they are in the CSV)
 def faturamento_total(df):
     return df["faturamento (R$)"].sum()
 
@@ -85,37 +84,41 @@ def maior_menor_faturamento(df):
     menor = faturamento_ano.idxmin()
     return maior, menor
 
-# 🔎 Detecta se deve consultar a planilha
-
-def pergunta_envia_para_planilha(texto):
-    palavras_chave = [
+# 🔎 Decide whether to query the spreadsheet
+def pergunta_envia_para_planilha(texto: str) -> bool:
+    keywords_en_pt = [
+        # EN
+        "profit", "revenue", "income", "species", "producing", "production", "years",
+        "how many", "which year", "in", "turnover", "how much", "values", "total",
+        # PT (keep for bilingual robustness)
         "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
-        "qual foi", "em", "faturamento", "quanto gerou", "valores", "total"
+        "qual foi", "faturamento", "quanto gerou", "valores", "total"
     ]
-    return any(p in texto.lower() for p in palavras_chave)
+    t = texto.lower()
+    return any(k in t for k in keywords_en_pt)
 
-# Entrada do usuário
-query = st.chat_input("Pode perguntar qualquer coisa sobre o SAF Cristal!")
+# User input
+query = st.chat_input("Ask anything about SAF Cristal!")
 
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
     if pergunta_envia_para_planilha(query):
-        with st.spinner("Consultando os dados do Sítio Cristal... 📊"):
+        with st.spinner("Checking Sítio Cristal data... 📊"):
             try:
                 resposta_dados = agent.run(query)
             except Exception as e:
-                resposta_dados = f"[Ops! Não consegui pegar os dados certos agora: {str(e)}]"
+                resposta_dados = f"[Oops! I couldn’t fetch the data right now: {str(e)}]"
     else:
         resposta_dados = ""
 
     input_completo = (
-        "Você é o SAFBot 🐝, um ajudante do Sítio Cristal. "
-        "Explique tudo com jeitinho simples, sem termos técnicos, como se estivesse conversando com alguém da zona rural. "
-        "Fale de forma acolhedora e use linguagem fácil. Responda com base nisso, e nos dados abaixo, se houver:\n\n"
+        "You are SAFBot 🐝, a helper from Sítio Cristal. "
+        "Explain things in a warm, simple way without technical jargon — like talking with someone from the countryside. "
+        "Be friendly and clear. Answer based on this context and the data below if available:\n\n"
         f"{resposta_dados}\n\n"
-        f"Pergunta do usuário: {query}"
+        f"User question: {query}"
     )
 
     resposta_obj = llm_chat.invoke(
