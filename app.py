@@ -12,8 +12,8 @@ load_dotenv()
 openai_key = os.getenv("OPENAI_API_KEY")
 
 # 🌱 Page config
-st.set_page_config(page_title="Sítio Cristal AI Agent 🌱", layout="wide")
-st.title("🐝 Sítio Cristal — AI Assistant")
+st.set_page_config(page_title="Cristal Farm AI Agent 🌱", layout="wide")
+st.title("🐝 Cristal Farm — AI Assistant")
 st.markdown("Chat with the assistant about the SAF data. Clear, simple answers — like a friendly porch conversation!")
 
 # 📊 Load spreadsheet
@@ -29,12 +29,12 @@ if "visible_history" not in st.session_state:
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown("""
 Hello! 😊  
-I’m **SAFBot**, a helper from **Sítio Cristal**. I’m here to chat with you and explain everything about our agroforestry system. 🌱💬  
+I’m **SAFBot**, a helper from **Cristal Farm**. I’m here to chat with you and explain everything about our agroforestry system. 🌱💬  
 Want to know which species we have? How much a certain year yielded? Or what exactly an SAF is? Ask away — I’ll keep it simple and direct, like we’re talking on the porch. 🐝💛
 
 ---
-📌 Examples you can ask:
-- Which species are in SAF Cristal?
+📌 Examples of what you can ask:
+- Which species are in Cristal Farm’s SAF?
 - What was the profit in 2040?
 - What is an SAF?
 - How does this system help the environment?
@@ -89,7 +89,7 @@ def pergunta_envia_para_planilha(texto: str) -> bool:
     keywords_en_pt = [
         # EN
         "profit", "revenue", "income", "species", "producing", "production", "years",
-        "how many", "which year", "in", "turnover", "how much", "values", "total",
+        "how many", "which year", "turnover", "how much", "values", "total",
         # PT (keep for bilingual robustness)
         "lucro", "renda", "espécies", "produzindo", "produção", "anos", "quantos",
         "qual foi", "faturamento", "quanto gerou", "valores", "total"
@@ -98,14 +98,14 @@ def pergunta_envia_para_planilha(texto: str) -> bool:
     return any(k in t for k in keywords_en_pt)
 
 # User input
-query = st.chat_input("Ask anything about SAF Cristal!")
+query = st.chat_input("Ask anything about Cristal Farm’s SAF!")
 
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
     if pergunta_envia_para_planilha(query):
-        with st.spinner("Checking Sítio Cristal data... 📊"):
+        with st.spinner("Checking Cristal Farm data... 📊"):
             try:
                 resposta_dados = agent.run(query)
             except Exception as e:
@@ -114,7 +114,7 @@ if query:
         resposta_dados = ""
 
     input_completo = (
-        "You are SAFBot 🐝, a helper from Sítio Cristal. "
+        "You are SAFBot 🐝, a helper from Cristal Farm. "
         "Explain things in a warm, simple way without technical jargon — like talking with someone from the countryside. "
         "Be friendly and clear. Answer based on this context and the data below if available:\n\n"
         f"{resposta_dados}\n\n"
