@@ -1,17 +1,16 @@
-streamlit
-pandas
-openai
-langchain
-langchain-experimental
-langchain-community
-python-dotenv
-tabulate
-langchain-openai
-langchain-experimental>=0.0.63
+# Interface
 streamlit>=1.36
-pandas>=2.2.2
 python-dotenv>=1.0.1
+
+# Manipulação de dados
+pandas>=2.2.2
+tabulate>=0.9.0
+
+# LangChain + OpenAI stack
 langchain==0.2.11
 langchain-openai==0.1.8
 langchain-experimental==0.0.64
+langchain-community==0.2.10
 
+# Biblioteca base da OpenAI
+openai>=1.30.0
