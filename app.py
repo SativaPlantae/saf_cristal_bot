@@ -1,45 +1,53 @@
+# app.py — Cristal Farm · Assistente IA (PT-BR)
+
 import os
 import re
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAI
-from langchain_experimental.agents import create_pandas_dataframe_agent
+# Import robusto (algumas versões movem a função de lugar)
+try:
+    from langchain_experimental.agents import create_pandas_dataframe_agent
+except ImportError:
+    from langchain_experimental.agent_toolkits import create_pandas_dataframe_agent
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import HumanMessage
 
-# 🌿 Load env vars
+# 🌿 Variáveis de ambiente
 load_dotenv()
 openai_key = os.getenv("OPENAI_API_KEY")
 
-# 🌱 Page config
-st.set_page_config(page_title="Cristal Farm AI Agent 🌱", layout="wide")
-st.title("🐝 Cristal Farm — AI Assistant")
-st.markdown("Chat with the assistant about the SAF data. Clear, simple answers — like a friendly porch conversation!")
+# 🌱 Configuração da página
+st.set_page_config(page_title="Cristal Farm · Assistente IA 🌱", layout="wide")
+st.title("🐝 Cristal Farm — Assistente IA")
+st.markdown("Converse sobre os dados do SAF. Respostas claras e simples — como um papo de varanda!")
 
-# 📊 Load spreadsheet (kept in Portuguese on GitHub)
+# 📊 Carrega a planilha (em PT no repositório)
 df = pd.read_csv("dados/data_2.csv", sep=";")
 
-# 🧠 Conversation memory
+# 🧠 Memória da conversa
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 🧾 Visible history + welcome message
+# 🧾 Histórico visível + mensagem de boas-vindas
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
-        st.markdown("""
-Hello! 😊  
-I’m **SAFBot**, a helper from **Cristal Farm**. I’m here to chat with you and explain everything about our agroforestry system. 🌱💬  
-Want to know which species we have? How much a certain year yielded? Or what exactly an SAF is? Ask away — I’ll keep it simple and direct, like we’re talking on the porch. 🐝💛
+        st.markdown(
+            """
+Olá! 😊  
+Eu sou a **SAFBot**, ajudante da **Cristal Farm**. Estou aqui para explicar tudo sobre o nosso sistema agroflorestal. 🌱💬  
+Quer saber **quais espécies temos**, **quanto rendeu em determinado ano** ou **o que é um SAF**? Pergunte à vontade — falo simples e direto, como numa conversa na varanda. 🐝💛
 
 ---
-📌 Examples of what you can ask:
-- Which species are in Cristal Farm’s SAF?
-- What was the profit in 2040?
-- What is an SAF?
-- How does this system help the environment?
-        """)
+📌 Exemplos do que você pode perguntar:
+- Quais espécies existem no SAF da Cristal Farm?
+- Qual foi o **lucro** em 2040?
+- O que é um SAF?
+- Como esse sistema ajuda o meio ambiente?
+"""
+        )
 
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
@@ -47,11 +55,11 @@ for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(bot_msg)
 
-# 🤖 Models
+# 🤖 Modelos
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
 llm_agent = OpenAI(temperature=0.3, openai_api_key=openai_key)
 
-# 📊 Agent with DataFrame access
+# 📊 Agente com acesso ao DataFrame
 agent = create_pandas_dataframe_agent(
     llm=llm_agent,
     df=df,
@@ -61,10 +69,10 @@ agent = create_pandas_dataframe_agent(
 )
 
 # =========================
-# 🔁 TWO-WAY TRANSLATOR
+# 🔁 TRADUTOR BIDIRECIONAL
 # =========================
 
-# Column mapping (EN -> PT)
+# Mapa de colunas (EN -> PT)
 column_alias = {
     "type": "tipo",
     "years": "anos",
@@ -79,7 +87,7 @@ column_alias = {
     "product": "produto",
 }
 
-# Value mapping per field (EN -> PT)
+# Valores (EN -> PT)
 value_alias_en_to_pt = {
     # tipo
     "agricultural": "Agrícola",
@@ -112,26 +120,23 @@ value_alias_en_to_pt = {
     "juice": "Suco",
 }
 
-# PT -> EN (reverse)
+# Valores (PT -> EN) — útil se o agente responder em EN
 value_alias_pt_to_en = {
-    # tipo
     "Agrícola": "Agricultural",
     "Florestal": "Forestry",
     "Frutífera": "Fruit-bearing",
-    # esta_produzindo
     "Sim": "Yes",
     "Não": "No",
-    # especies
     "Açaí": "Açaí",
     "Andiroba": "Andiroba",
     "Banana": "Banana",
+    "Cacao": "Cacao",
     "Cacau": "Cacao",
     "Coqueiro": "Coconut Palm",
     "Cupuçu": "Cupuaçu",
     "Mamão": "Papaya",
     "Milho": "Corn",
     "Mogno": "Mahogany",
-    # produto
     "Fruto": "Fruit",
     "Madeira": "Wood",
     "Pamonha": "Corn Cake",
@@ -140,34 +145,29 @@ value_alias_pt_to_en = {
 }
 
 def _regex_replace_words(text: str, mapping: dict, case_insensitive=True):
-    """Replace whole words using a mapping dict with regex boundaries."""
+    """Substitui palavras inteiras usando um dicionário (com fronteiras de palavra)."""
     flags = re.IGNORECASE if case_insensitive else 0
-    # Sort by length to replace longer phrases first (avoid partial overlaps)
     for k in sorted(mapping.keys(), key=len, reverse=True):
         pattern = r"\b" + re.escape(k) + r"\b"
         text = re.sub(pattern, mapping[k], text, flags=flags)
     return text
 
 def translate_query_to_pt(query: str) -> str:
-    """Map English column names and English value tokens to Portuguese before sending to the agent."""
-    q = query
-    # Columns
-    q = _regex_replace_words(q, column_alias, case_insensitive=True)
-    # Values
+    """Mapeia nomes de colunas e valores (EN -> PT) antes de enviar ao agente."""
+    q = _regex_replace_words(query, column_alias, case_insensitive=True)
     q = _regex_replace_words(q, value_alias_en_to_pt, case_insensitive=True)
     return q
 
-def translate_text_pt_to_en(text: str) -> str:
-    """Translate common Portuguese values back to English in the agent's output."""
+def translate_text_en_to_pt(text: str) -> str:
+    """Caso o agente retorne algum termo fixo em EN, converte para PT."""
     if not isinstance(text, str):
         return text
-    return _regex_replace_words(text, value_alias_pt_to_en, case_insensitive=False)
+    return _regex_replace_words(text, value_alias_en_to_pt, case_insensitive=True)
 
 # =========================
-# Helper functions (PT cols)
+# Funções auxiliares (colunas PT)
 # =========================
 def faturamento_total(df_):
-    # If currency strings are present (e.g., 'R$ 66.360,00'), leave numeric parsing to the agent as needed
     return df_["faturamento"].sum() if "faturamento" in df_.columns else df_["faturamento (R$)"].sum()
 
 def lucro_total(df_):
@@ -192,7 +192,7 @@ def maior_menor_faturamento(df_):
     menor = faturamento_ano.idxmin()
     return maior, menor
 
-# 🔎 Decide whether to query the spreadsheet
+# 🔎 Detecta se a pergunta deve ir para a planilha
 def pergunta_envia_para_planilha(texto: str) -> bool:
     keywords_en_pt = [
         # EN
@@ -207,43 +207,43 @@ def pergunta_envia_para_planilha(texto: str) -> bool:
     t = texto.lower()
     return any(k in t for k in keywords_en_pt)
 
-# ===== USER INPUT =====
-query = st.chat_input("Ask anything about Cristal Farm’s SAF!")
+# ===== ENTRADA DO USUÁRIO =====
+query = st.chat_input("Pergunte algo sobre o SAF da Cristal Farm!")
 
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
     if pergunta_envia_para_planilha(query):
-        with st.spinner("Checking Cristal Farm data... 📊"):
+        with st.spinner("Consultando os dados da Cristal Farm... 📊"):
             try:
-                # Translate query EN -> PT before sending to the agent
+                # Traduz a consulta (EN -> PT) antes de enviar ao agente
                 query_pt = translate_query_to_pt(query)
                 resposta_dados = agent.run(query_pt)
-                # Translate any PT tokens in the agent's raw data reply back to EN
-                resposta_dados = translate_text_pt_to_en(resposta_dados)
+                # Garante termos em português se o agente devolver algo em EN
+                resposta_dados = translate_text_en_to_pt(resposta_dados)
             except Exception as e:
-                resposta_dados = f"[Oops! I couldn’t fetch the data right now: {str(e)}]"
+                resposta_dados = f"[Ops! Não consegui acessar os dados agora: {str(e)}]"
     else:
         resposta_dados = ""
 
-    # Build the assistant instruction
+    # Instrução para o modelo de conversa
     input_completo = (
-        "You are SAFBot 🐝, a helper from Cristal Farm. "
-        "Explain things in a warm, simple way without technical jargon — like talking with someone from the countryside. "
-        "Be friendly and clear. Answer based on this context and the data below if available:\n\n"
+        "Você é a SAFBot 🐝, ajudante da Cristal Farm. "
+        "Explique de forma acolhedora e simples, sem jargões técnicos — como quem conversa na varanda. "
+        "Seja amigável e claro. Responda com base no contexto e, se houver, nos dados abaixo:\n\n"
         f"{resposta_dados}\n\n"
-        f"User question: {query}"
+        f"Pergunta do usuário: {query}"
     )
 
-    # Run chat model with memory
+    # Modelo de chat com memória
     resposta_obj = llm_chat.invoke(
         st.session_state.memory.load_memory_variables({})["history"] + [HumanMessage(content=input_completo)]
     )
 
     resposta = resposta_obj.content.strip() if hasattr(resposta_obj, "content") else str(resposta_obj)
-    # Final safety pass: translate any remaining PT tokens to EN in the final message
-    resposta = translate_text_pt_to_en(resposta)
+    # Passo final: assegura termos de domínio em PT
+    resposta = translate_text_en_to_pt(resposta)
 
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
