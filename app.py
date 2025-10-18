@@ -37,6 +37,7 @@ if "visible_history" not in st.session_state:
         st.markdown(
             """Olá! 😊
 Eu sou a SAFBot, ajudante do Sítio Cristal. Estou aqui para explicar tudo sobre o nosso sistema agroflorestal. 🌱💬
+
 Quer saber quais espécies cultivamos, quanto rendeu em determinado ano ou o que é um SAF? Pergunte à vontade. 🐝💛"""
         )
 
