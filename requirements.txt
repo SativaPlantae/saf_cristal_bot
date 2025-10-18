@@ -7,4 +7,4 @@ langchain-community
 python-dotenv
 tabulate
 langchain-openai
-
+langchain-experimental>=0.0.63
