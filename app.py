@@ -6,7 +6,6 @@ import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAI
-# Import robusto (algumas versões movem a função de lugar)
 try:
     from langchain_experimental.agents import create_pandas_dataframe_agent
 except ImportError:
@@ -23,25 +22,24 @@ st.set_page_config(page_title="Sítio Cristal · Assistente IA 🌱", layout="wi
 st.title("🐝 Sítio Cristal — Assistente IA")
 st.markdown("Converse sobre os dados do SAF. Respostas claras e simples!")
 
-# 📊 Carrega a planilha (em PT no repositório)
+# 📊 Carrega a planilha
 df = pd.read_csv("dados/data_2.csv", sep=";")
 
 # 🧠 Memória da conversa
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 🧾 Histórico visível + mensagem de boas-vindas (se for a primeira vez)
+# 🧾 Histórico visível + mensagem de boas-vindas
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(
             """Olá! 😊
 Eu sou a SAFBot, ajudante do Sítio Cristal. Estou aqui para explicar tudo sobre o nosso sistema agroflorestal. 🌱💬
-
 Quer saber quais espécies cultivamos, quanto rendeu em determinado ano ou o que é um SAF? Pergunte à vontade. 🐝💛"""
         )
 
-# Re-render do histórico
+# Histórico
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
@@ -62,74 +60,33 @@ agent = create_pandas_dataframe_agent(
 )
 
 # =========================
-# 🔁 TRADUTOR BIDIRECIONAL
+# 🔁 MAPEAMENTO DE TERMOS
 # =========================
 
-# Mapa de colunas (EN -> PT)
 column_alias = {
-    "type": "tipo",
-    "years": "anos",
-    "year": "anos",
-    "species": "especies",
-    "producing": "esta_produzindo",
-    "expenses": "despesas",
-    "revenue": "faturamento",
-    "profit": "lucro",
-    "individuals": "individuos",
-    "price": "preco",
-    "product": "produto",
-}
-
-# Valores (EN -> PT)
-value_alias_en_to_pt = {
-    # tipo
-    "agricultural": "Agrícola",
-    "forestry": "Florestal",
-    "fruit-bearing": "Frutífera",
-    # esta_produzindo
-    "yes": "Sim",
-    "no": "Não",
-    # especies
-    "açaí": "Açaí",
-    "acai": "Açaí",
-    "andiroba": "Andiroba",
-    "banana": "Banana",
-    "cacao": "Cacau",
-    "cocoa": "Cacau",
-    "coconut palm": "Coqueiro",
-    "coconut": "Coqueiro",
-    "cupuaçu": "Cupuçu",
-    "cupuuçu": "Cupuçu",
-    "cupuuco": "Cupuçu",
-    "cupuaçu ": "Cupuçu",
-    "papaya": "Mamão",
-    "corn": "Milho",
-    "mahogany": "Mogno",
-    # produto
-    "fruit": "Fruto",
-    "wood": "Madeira",
-    "corn cake": "Pamonha",
-    "pulp": "Polpa",
-    "juice": "Suco",
+    "tipo": "tipo",
+    "anos": "anos",
+    "especies": "especies",
+    "esta_produzindo": "esta_produzindo",
+    "despesas": "despesas",
+    "faturamento": "faturamento",
+    "lucro": "lucro",
+    "individuos": "individuos",
+    "preco": "preco",
+    "produto": "produto",
 }
 
 def _regex_replace_words(text: str, mapping: dict, case_insensitive=True):
-    """Substitui palavras inteiras usando um dicionário (com fronteiras de palavra)."""
     flags = re.IGNORECASE if case_insensitive else 0
     for k in sorted(mapping.keys(), key=len, reverse=True):
-        pattern = r"\b" + re.escape(k) + r"\b"
+        pattern = r"\\b" + re.escape(k) + r"\\b"
         text = re.sub(pattern, mapping[k], text, flags=flags)
     return text
 
-def translate_query_to_pt(query: str) -> str:
-    """Mapeia nomes de colunas e valores (EN -> PT) antes de enviar ao agente."""
-    q = _regex_replace_words(query, column_alias, case_insensitive=True)
-    q = _regex_replace_words(q, value_alias_en_to_pt, case_insensitive=True)
-    return q
+# =========================
+# Funções auxiliares
+# =========================
 
-# =========================
-# Funções auxiliares (colunas PT)
-# =========================
 def faturamento_total(df_):
     return df_["faturamento"].sum() if "faturamento" in df_.columns else df_["faturamento (R$)"].sum()
 
@@ -155,22 +112,16 @@ def maior_menor_faturamento(df_):
     menor = faturamento_ano.idxmin()
     return maior, menor
 
-# 🔎 Detecta se a pergunta deve ir para a planilha
 def pergunta_envia_para_planilha(texto: str) -> bool:
-    keywords_en_pt = [
-        # EN
-        "profit", "revenue", "income", "species", "producing", "production", "years",
-        "how many", "which year", "turnover", "how much", "values", "total", "type",
-        "individuals", "price", "product",
-        # PT
+    palavras_chave = [
         "lucro", "renda", "espécies", "especies", "produzindo", "produção", "anos",
         "quantos", "qual foi", "faturamento", "quanto gerou", "valores", "total",
         "tipo", "individuos", "preco", "produto"
     ]
     t = texto.lower()
-    return any(k in t for k in keywords_en_pt)
+    return any(k in t for k in palavras_chave)
 
-# ===== ENTRADA DO USUÁRIO =====
+# ===== ENTRADA =====
 query = st.chat_input("Pergunte algo sobre o SAF do Sítio Cristal!")
 
 if query:
@@ -180,16 +131,13 @@ if query:
     if pergunta_envia_para_planilha(query):
         with st.spinner("Consultando os dados do Sítio Cristal... 📊"):
             try:
-                # Traduz a consulta (EN -> PT) antes de enviar ao agente
-                query_pt = translate_query_to_pt(query)
-                resposta_dados = agent.run(query_pt)
+                resposta_dados = agent.run(query)
             except Exception as e:
                 resposta_dados = f"[Ops! Não consegui acessar os dados agora: {str(e)}]"
     else:
         resposta_dados = ""
 
-    # Instrução para o modelo de conversa
-    input_completo = (
+    entrada = (
         "Você é a SAFBot 🐝, ajudante do Sítio Cristal. "
         "Explique de forma acolhedora e simples, sem jargões técnicos — como quem conversa na varanda. "
         "Seja amigável e claro. Responda com base no contexto e, se houver, nos dados abaixo:\n\n"
@@ -197,9 +145,8 @@ if query:
         f"Pergunta do usuário: {query}"
     )
 
-    # Modelo de chat com memória
     resposta_obj = llm_chat.invoke(
-        st.session_state.memory.load_memory_variables({})["history"] + [HumanMessage(content=input_completo)]
+        st.session_state.memory.load_memory_variables({})["history"] + [HumanMessage(content=entrada)]
     )
     resposta = resposta_obj.content.strip() if hasattr(resposta_obj, "content") else str(resposta_obj)
 
