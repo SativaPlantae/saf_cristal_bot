@@ -1,4 +1,4 @@
-# app.py — Cristal Farm · Assistente IA (PT-BR)
+# app.py — Sítio Cristal · Assistente IA (PT-BR)
 
 import os
 import re
@@ -19,9 +19,9 @@ load_dotenv()
 openai_key = os.getenv("OPENAI_API_KEY")
 
 # 🌱 Configuração da página
-st.set_page_config(page_title="Cristal Farm · Assistente IA 🌱", layout="wide")
-st.title("🐝 Cristal Farm — Assistente IA")
-st.markdown("Converse sobre os dados do SAF. Respostas claras e simples — como um papo de varanda!")
+st.set_page_config(page_title="Sítio Cristal · Assistente IA 🌱", layout="wide")
+st.title("🐝 Sítio Cristal — Assistente IA")
+st.markdown("Converse sobre os dados do SAF. Respostas claras e simples!")
 
 # 📊 Carrega a planilha (em PT no repositório)
 df = pd.read_csv("dados/data_2.csv", sep=";")
@@ -30,25 +30,17 @@ df = pd.read_csv("dados/data_2.csv", sep=";")
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 🧾 Histórico visível + mensagem de boas-vindas
+# 🧾 Histórico visível + mensagem de boas-vindas (se for a primeira vez)
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(
-            """
-Olá! 😊  
-Eu sou a **SAFBot**, ajudante da **Cristal Farm**. Estou aqui para explicar tudo sobre o nosso sistema agroflorestal. 🌱💬  
-Quer saber **quais espécies temos**, **quanto rendeu em determinado ano** ou **o que é um SAF**? Pergunte à vontade — falo simples e direto, como numa conversa na varanda. 🐝💛
-
----
-📌 Exemplos do que você pode perguntar:
-- Quais espécies existem no SAF da Cristal Farm?
-- Qual foi o **lucro** em 2040?
-- O que é um SAF?
-- Como esse sistema ajuda o meio ambiente?
-"""
+            """Olá! 😊
+Eu sou a SAFBot, ajudante do Sítio Cristal. Estou aqui para explicar tudo sobre o nosso sistema agroflorestal. 🌱💬
+Quer saber quais espécies cultivamos, quanto rendeu em determinado ano ou o que é um SAF? Pergunte à vontade. 🐝💛"""
         )
 
+# Re-render do histórico
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
@@ -120,30 +112,6 @@ value_alias_en_to_pt = {
     "juice": "Suco",
 }
 
-# Valores (PT -> EN) — útil se o agente responder em EN
-value_alias_pt_to_en = {
-    "Agrícola": "Agricultural",
-    "Florestal": "Forestry",
-    "Frutífera": "Fruit-bearing",
-    "Sim": "Yes",
-    "Não": "No",
-    "Açaí": "Açaí",
-    "Andiroba": "Andiroba",
-    "Banana": "Banana",
-    "Cacao": "Cacao",
-    "Cacau": "Cacao",
-    "Coqueiro": "Coconut Palm",
-    "Cupuçu": "Cupuaçu",
-    "Mamão": "Papaya",
-    "Milho": "Corn",
-    "Mogno": "Mahogany",
-    "Fruto": "Fruit",
-    "Madeira": "Wood",
-    "Pamonha": "Corn Cake",
-    "Polpa": "Pulp",
-    "Suco": "Juice",
-}
-
 def _regex_replace_words(text: str, mapping: dict, case_insensitive=True):
     """Substitui palavras inteiras usando um dicionário (com fronteiras de palavra)."""
     flags = re.IGNORECASE if case_insensitive else 0
@@ -157,12 +125,6 @@ def translate_query_to_pt(query: str) -> str:
     q = _regex_replace_words(query, column_alias, case_insensitive=True)
     q = _regex_replace_words(q, value_alias_en_to_pt, case_insensitive=True)
     return q
-
-def translate_text_en_to_pt(text: str) -> str:
-    """Caso o agente retorne algum termo fixo em EN, converte para PT."""
-    if not isinstance(text, str):
-        return text
-    return _regex_replace_words(text, value_alias_en_to_pt, case_insensitive=True)
 
 # =========================
 # Funções auxiliares (colunas PT)
@@ -208,20 +170,18 @@ def pergunta_envia_para_planilha(texto: str) -> bool:
     return any(k in t for k in keywords_en_pt)
 
 # ===== ENTRADA DO USUÁRIO =====
-query = st.chat_input("Pergunte algo sobre o SAF da Cristal Farm!")
+query = st.chat_input("Pergunte algo sobre o SAF do Sítio Cristal!")
 
 if query:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
     if pergunta_envia_para_planilha(query):
-        with st.spinner("Consultando os dados da Cristal Farm... 📊"):
+        with st.spinner("Consultando os dados do Sítio Cristal... 📊"):
             try:
                 # Traduz a consulta (EN -> PT) antes de enviar ao agente
                 query_pt = translate_query_to_pt(query)
                 resposta_dados = agent.run(query_pt)
-                # Garante termos em português se o agente devolver algo em EN
-                resposta_dados = translate_text_en_to_pt(resposta_dados)
             except Exception as e:
                 resposta_dados = f"[Ops! Não consegui acessar os dados agora: {str(e)}]"
     else:
@@ -229,7 +189,7 @@ if query:
 
     # Instrução para o modelo de conversa
     input_completo = (
-        "Você é a SAFBot 🐝, ajudante da Cristal Farm. "
+        "Você é a SAFBot 🐝, ajudante do Sítio Cristal. "
         "Explique de forma acolhedora e simples, sem jargões técnicos — como quem conversa na varanda. "
         "Seja amigável e claro. Responda com base no contexto e, se houver, nos dados abaixo:\n\n"
         f"{resposta_dados}\n\n"
@@ -240,10 +200,7 @@ if query:
     resposta_obj = llm_chat.invoke(
         st.session_state.memory.load_memory_variables({})["history"] + [HumanMessage(content=input_completo)]
     )
-
     resposta = resposta_obj.content.strip() if hasattr(resposta_obj, "content") else str(resposta_obj)
-    # Passo final: assegura termos de domínio em PT
-    resposta = translate_text_en_to_pt(resposta)
 
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
