@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+# Import robusto (algumas versões movem a função de lugar)
 try:
     from langchain_experimental.agents import create_pandas_dataframe_agent
 except ImportError:
@@ -21,9 +22,11 @@ st.set_page_config(page_title="Sítio Cristal · Assistente IA 🌱", layout="wi
 st.title("🐝 Sítio Cristal — Assistente IA")
 st.markdown("Converse sobre os dados do SAF. Respostas claras e simples!")
 
+# Aviso se faltar a chave
 if not openai_key:
     st.warning("Defina a variável OPENAI_API_KEY nos Secrets/ambiente para o chatbot funcionar.")
 
+# Carrega a planilha (ajuste o caminho se necessário)
 df = pd.read_csv("dados/data_2.csv", sep=";")
 
 # ============ Barra lateral ============
@@ -39,7 +42,7 @@ with st.sidebar:
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# Mensagem de boas-vindas + exemplos
+# Mensagem de boas-vindas + exemplos (só na 1ª renderização)
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
@@ -59,7 +62,7 @@ Quer saber quais espécies cultivamos, quanto rendeu em determinado ano ou o que
 """
         )
 
-# Histórico
+# Re-render do histórico visual
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
@@ -67,33 +70,60 @@ for user_msg, bot_msg in st.session_state.visible_history:
         st.markdown(bot_msg)
 
 # ============ Modelos ============
+# Chat para respostas conversacionais
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
+
+# Chat para o agente (recomendado: temperatura 0.0)
 llm_agent = ChatOpenAI(temperature=0.0, model="gpt-4o-mini", openai_api_key=openai_key)
 
 # ============ Agente DataFrame ============
 cols = ", ".join(df.columns.astype(str))
 agent_prefix = (
-    "Você é a SAFBot 🐝, ajudante do Sítio Cristal. "
-    "Fale como alguém da roça: simples, acolhedor e, às vezes, até um pouco ignorante — daquele jeito que faz a gente rir, mas com o coração no lugar. "
-    "Não use termos técnicos demais, e se não souber, invente uma explicação engraçada ou conte um ‘causo’. "
-    "Mantenha o estilo de conversa leve, direta e natural, como um papo de varanda. "
-    "Quando tiver acesso a dados, use-os para responder de forma objetiva e bem-humorada. "
-    "As colunas disponíveis são: " + cols + ". "
-    "Se houver campo de produção, considere `esta_produzindo == 'Sim'` como verdadeiro. "
-    "Quando o usuário fizer perguntas, responda de forma descontraída e com um toque de sabedoria popular."
+    "Você é um analista de dados do Sítio Cristal e tem acesso a um DataFrame chamado df. "
+    "Trabalhe em **português**. Use Python para consultar o df e calcule exatamente o que for pedido "
+    "(contar, somar, filtrar, agrupar). "
+    f"As colunas disponíveis são: {cols}. "
+    "Quando houver campo de produção, considere `esta_produzindo == 'Sim'` como verdadeiro. "
+    "Responda de forma direta, mostrando números e, quando fizer sentido, uma frase breve de conclusão."
 )
 
 agent = create_pandas_dataframe_agent(
     llm=llm_agent,
     df=df,
-    agent_type="openai-tools",
+    agent_type="openai-tools",          # essencial para tool calling
     verbose=False,
     handle_parsing_errors=True,
     allow_dangerous_code=True,
     prefix=agent_prefix,
 )
 
-# ============ Funções auxiliares ============
+# ============ Utilidades (se quiser usar em respostas rápidas) ============
+def faturamento_total(df_):
+    return df_["faturamento"].sum() if "faturamento" in df_.columns else df_["faturamento (R$)"].sum()
+
+def lucro_total(df_):
+    return df_["lucro"].sum()
+
+def despesas_total(df_):
+    return df_["despesas"].sum()
+
+def anos_de_duracao(df_):
+    return len(df_["anos"].unique())
+
+def media_anual(df_, coluna):
+    return df_.groupby("anos")[coluna].sum().mean()
+
+def media_mensal(df_, coluna):
+    return media_anual(df_, coluna) / 12
+
+def maior_menor_faturamento(df_):
+    col = "faturamento" if "faturamento" in df_.columns else "faturamento (R$)"
+    faturamento_ano = df_.groupby("anos")[col].sum()
+    maior = faturamento_ano.idxmax()
+    menor = faturamento_ano.idxmin()
+    return maior, menor
+
+# Heurística simples: decidir se deve consultar a planilha
 def pergunta_envia_para_planilha(texto: str) -> bool:
     palavras_chave = [
         "lucro", "renda", "espécies", "especies", "produzindo", "produção", "anos",
@@ -103,13 +133,15 @@ def pergunta_envia_para_planilha(texto: str) -> bool:
     t = texto.lower()
     return any(k in t for k in palavras_chave)
 
-# ============ Entrada ============
+# ============ Entrada do usuário ============
 query = st.chat_input("Pergunte algo sobre o SAF do Sítio Cristal!")
 
 if query:
+    # Exibe mensagem do usuário
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
+    # Consulta à planilha (quando fizer sentido)
     resposta_dados = ""
     if pergunta_envia_para_planilha(query):
         with st.spinner("Consultando os dados do Sítio Cristal... 📊"):
@@ -120,25 +152,28 @@ if query:
             except Exception as e:
                 resposta_dados = f"[Ops! Não consegui acessar os dados agora: {str(e)}]"
 
+    # Constrói as mensagens incluindo a MEMÓRIA
     mensagens_anteriores = st.session_state.memory.load_memory_variables({})["history"]
     mensagens = mensagens_anteriores + [
         HumanMessage(
             content=(
                 "Você é a SAFBot 🐝, ajudante do Sítio Cristal. "
-                "Fale como alguém simples do campo: acolhedor, simpático e um pouco ignorante às vezes — mas sempre bem-intencionado e divertido. "
-                "Responda de forma leve, direta e com aquele jeitinho da roça, usando expressões populares e uma pitada de humor. "
-                "Baseie suas respostas no contexto e, se houver, nos dados abaixo:\n\n"
+                "Explique de forma acolhedora e simples, sem jargões técnicos — como quem conversa na varanda. "
+                "Seja amigável e claro. Responda com base no contexto e, se houver, nos dados abaixo:\n\n"
                 f"{resposta_dados}\n\n"
                 f"Pergunta do usuário: {query}"
             )
         )
     ]
 
+    # Gera a resposta com contexto + memória
     resposta_obj = llm_chat.invoke(mensagens)
     resposta = resposta_obj.content.strip() if hasattr(resposta_obj, "content") else str(resposta_obj)
 
+    # Exibe a resposta
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
 
+    # Atualiza histórico/memória
     st.session_state.visible_history.append((query, resposta))
     st.session_state.memory.save_context({"input": query}, {"output": resposta})
