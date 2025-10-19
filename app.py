@@ -34,9 +34,19 @@ if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(
-            """Olá! 😊
-Eu sou a SAFBot, ajudante do Sítio Cristal. Estou aqui para explicar tudo sobre o nosso sistema agroflorestal. 🌱💬
-Quer saber quais espécies cultivamos, quanto rendeu em determinado ano ou o que é um SAF? Pergunte à vontade. 🐝💛"""
+            """Olá! 😊  
+Eu sou a SAFBot, ajudante do Sítio Cristal. Estou aqui para explicar tudo sobre o nosso sistema agroflorestal. 🌱💬  
+
+Quer saber quais espécies cultivamos, quanto rendeu em determinado ano ou o que é um SAF? Pergunte à vontade. 🐝💛  
+
+---  
+📌 Exemplos de perguntas que você pode fazer:  
+- Quais espécies existem no SAF?  
+- Qual foi o lucro total do Sítio Cristal?  
+- Em que ano tivemos o maior faturamento?  
+- Quantas espécies estão produzindo atualmente?  
+- O que significa SAF?  
+"""
         )
 
 # Histórico
@@ -58,30 +68,6 @@ agent = create_pandas_dataframe_agent(
     handle_parsing_errors=True,
     allow_dangerous_code=True
 )
-
-# =========================
-# 🔁 MAPEAMENTO DE TERMOS
-# =========================
-
-column_alias = {
-    "tipo": "tipo",
-    "anos": "anos",
-    "especies": "especies",
-    "esta_produzindo": "esta_produzindo",
-    "despesas": "despesas",
-    "faturamento": "faturamento",
-    "lucro": "lucro",
-    "individuos": "individuos",
-    "preco": "preco",
-    "produto": "produto",
-}
-
-def _regex_replace_words(text: str, mapping: dict, case_insensitive=True):
-    flags = re.IGNORECASE if case_insensitive else 0
-    for k in sorted(mapping.keys(), key=len, reverse=True):
-        pattern = r"\\b" + re.escape(k) + r"\\b"
-        text = re.sub(pattern, mapping[k], text, flags=flags)
-    return text
 
 # =========================
 # Funções auxiliares
