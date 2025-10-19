@@ -5,7 +5,7 @@ import re
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI, OpenAI  # OpenAI não é usado aqui, mas mantenho se você quiser alternar
+from langchain_openai import ChatOpenAI
 # Import robusto (algumas versões movem a função de lugar)
 try:
     from langchain_experimental.agents import create_pandas_dataframe_agent
@@ -22,14 +22,27 @@ st.set_page_config(page_title="Sítio Cristal · Assistente IA 🌱", layout="wi
 st.title("🐝 Sítio Cristal — Assistente IA")
 st.markdown("Converse sobre os dados do SAF. Respostas claras e simples!")
 
+# Aviso se faltar a chave
+if not openai_key:
+    st.warning("Defina a variável OPENAI_API_KEY nos Secrets/ambiente para o chatbot funcionar.")
+
 # Carrega a planilha (ajuste o caminho se necessário)
 df = pd.read_csv("dados/data_2.csv", sep=";")
+
+# ============ Barra lateral ============
+with st.sidebar:
+    st.header("⚙️ Opções")
+    DEBUG = st.toggle("Mostrar log de depuração", value=False, help="Exibe mensagens úteis durante a consulta")
+    if st.button("🧹 Limpar conversa"):
+        st.session_state.pop("visible_history", None)
+        st.session_state.pop("memory", None)
+        st.success("Conversa limpa! Você pode começar de novo.")
 
 # ============ Memória ============
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# Mensagem de boas-vindas + exemplos
+# Mensagem de boas-vindas + exemplos (só na 1ª renderização)
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
@@ -49,7 +62,7 @@ Quer saber quais espécies cultivamos, quanto rendeu em determinado ano ou o que
 """
         )
 
-# Re-render do histórico
+# Re-render do histórico visual
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
@@ -60,12 +73,11 @@ for user_msg, bot_msg in st.session_state.visible_history:
 # Chat para respostas conversacionais
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
 
-# Chat para o agente (recomendado: zero ou baixa temperatura)
+# Chat para o agente (recomendado: temperatura 0.0)
 llm_agent = ChatOpenAI(temperature=0.0, model="gpt-4o-mini", openai_api_key=openai_key)
 
 # ============ Agente DataFrame ============
 cols = ", ".join(df.columns.astype(str))
-
 agent_prefix = (
     "Você é um analista de dados do Sítio Cristal e tem acesso a um DataFrame chamado df. "
     "Trabalhe em **português**. Use Python para consultar o df e calcule exatamente o que for pedido "
@@ -111,7 +123,7 @@ def maior_menor_faturamento(df_):
     menor = faturamento_ano.idxmin()
     return maior, menor
 
-# Decisão simples: mandar para a planilha?
+# Heurística simples: decidir se deve consultar a planilha
 def pergunta_envia_para_planilha(texto: str) -> bool:
     palavras_chave = [
         "lucro", "renda", "espécies", "especies", "produzindo", "produção", "anos",
@@ -121,16 +133,16 @@ def pergunta_envia_para_planilha(texto: str) -> bool:
     t = texto.lower()
     return any(k in t for k in palavras_chave)
 
-# (Opcional) depuração
-DEBUG = False
-
 # ============ Entrada do usuário ============
 query = st.chat_input("Pergunte algo sobre o SAF do Sítio Cristal!")
 
 if query:
+    # Exibe mensagem do usuário
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(query)
 
+    # Consulta à planilha (quando fizer sentido)
+    resposta_dados = ""
     if pergunta_envia_para_planilha(query):
         with st.spinner("Consultando os dados do Sítio Cristal... 📊"):
             try:
@@ -139,25 +151,29 @@ if query:
                 resposta_dados = agent.run(query)
             except Exception as e:
                 resposta_dados = f"[Ops! Não consegui acessar os dados agora: {str(e)}]"
-    else:
-        resposta_dados = ""
 
-    # Instrução para o modelo de conversa (usa contexto da planilha quando houver)
-    entrada = (
-        "Você é a SAFBot 🐝, ajudante do Sítio Cristal. "
-        "Explique de forma acolhedora e simples, sem jargões técnicos — como quem conversa na varanda. "
-        "Seja amigável e claro. Responda com base no contexto e, se houver, nos dados abaixo:\n\n"
-        f"{resposta_dados}\n\n"
-        f"Pergunta do usuário: {query}"
-    )
+    # Constrói as mensagens incluindo a MEMÓRIA
+    mensagens_anteriores = st.session_state.memory.load_memory_variables({})["history"]
+    mensagens = mensagens_anteriores + [
+        HumanMessage(
+            content=(
+                "Você é a SAFBot 🐝, ajudante do Sítio Cristal. "
+                "Explique de forma acolhedora e simples, sem jargões técnicos — como quem conversa na varanda. "
+                "Seja amigável e claro. Responda com base no contexto e, se houver, nos dados abaixo:\n\n"
+                f"{resposta_dados}\n\n"
+                f"Pergunta do usuário: {query}"
+            )
+        )
+    ]
 
-    resposta_obj = llm_chat.invoke(
-        st.session_state.memory.load_memory_variables({})["history"] + [HumanMessage(content=entrada)]
-    )
+    # Gera a resposta com contexto + memória
+    resposta_obj = llm_chat.invoke(mensagens)
     resposta = resposta_obj.content.strip() if hasattr(resposta_obj, "content") else str(resposta_obj)
 
+    # Exibe a resposta
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(resposta)
 
+    # Atualiza histórico/memória
     st.session_state.visible_history.append((query, resposta))
     st.session_state.memory.save_context({"input": query}, {"output": resposta})
