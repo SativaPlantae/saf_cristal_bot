@@ -158,7 +158,7 @@ if query:
         HumanMessage(
             content=(
                 "Você é a SAFBot 🐝, ajudante do Sítio Cristal. "
-                "Explique de forma simples, sem jargões técnicos e como alguém da zona rural. "
+                "Explique de forma simples e sem jargões técnicos. "
                 "Seja amigável e claro. Responda com base no contexto e, se houver, nos dados abaixo:\n\n"
                 f"{resposta_dados}\n\n"
                 f"Pergunta do usuário: {query}"
