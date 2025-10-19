@@ -5,7 +5,8 @@ import re
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI, OpenAI
+from langchain_openai import ChatOpenAI, OpenAI  # OpenAI não é usado aqui, mas mantenho se você quiser alternar
+# Import robusto (algumas versões movem a função de lugar)
 try:
     from langchain_experimental.agents import create_pandas_dataframe_agent
 except ImportError:
@@ -13,23 +14,22 @@ except ImportError:
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import HumanMessage
 
-# 🌿 Variáveis de ambiente
+# ============ Configuração base ============
 load_dotenv()
 openai_key = os.getenv("OPENAI_API_KEY")
 
-# 🌱 Configuração da página
 st.set_page_config(page_title="Sítio Cristal · Assistente IA 🌱", layout="wide")
 st.title("🐝 Sítio Cristal — Assistente IA")
 st.markdown("Converse sobre os dados do SAF. Respostas claras e simples!")
 
-# 📊 Carrega a planilha
+# Carrega a planilha (ajuste o caminho se necessário)
 df = pd.read_csv("dados/data_2.csv", sep=";")
 
-# 🧠 Memória da conversa
+# ============ Memória ============
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# 🧾 Histórico visível + mensagem de boas-vindas
+# Mensagem de boas-vindas + exemplos
 if "visible_history" not in st.session_state:
     st.session_state.visible_history = []
     with st.chat_message("assistant", avatar="🐝"):
@@ -40,39 +40,52 @@ Eu sou a SAFBot, ajudante do Sítio Cristal. Estou aqui para explicar tudo sobre
 Quer saber quais espécies cultivamos, quanto rendeu em determinado ano ou o que é um SAF? Pergunte à vontade. 🐝💛  
 
 ---  
-📌 Exemplos de perguntas que você pode fazer:  
+📌 **Exemplos de perguntas**  
 - Quais espécies existem no SAF?  
+- Quantas espécies estão produzindo atualmente?  
 - Qual foi o lucro total do Sítio Cristal?  
 - Em que ano tivemos o maior faturamento?  
-- Quantas espécies estão produzindo atualmente?  
 - O que significa SAF?  
 """
         )
 
-# Histórico
+# Re-render do histórico
 for user_msg, bot_msg in st.session_state.visible_history:
     with st.chat_message("user", avatar="🧑‍🌾"):
         st.markdown(user_msg)
     with st.chat_message("assistant", avatar="🐝"):
         st.markdown(bot_msg)
 
-# 🤖 Modelos
+# ============ Modelos ============
+# Chat para respostas conversacionais
 llm_chat = ChatOpenAI(temperature=0.3, model="gpt-4o", openai_api_key=openai_key)
-llm_agent = OpenAI(temperature=0.3, openai_api_key=openai_key)
 
-# 📊 Agente com acesso ao DataFrame
+# Chat para o agente (recomendado: zero ou baixa temperatura)
+llm_agent = ChatOpenAI(temperature=0.0, model="gpt-4o-mini", openai_api_key=openai_key)
+
+# ============ Agente DataFrame ============
+cols = ", ".join(df.columns.astype(str))
+
+agent_prefix = (
+    "Você é um analista de dados do Sítio Cristal e tem acesso a um DataFrame chamado df. "
+    "Trabalhe em **português**. Use Python para consultar o df e calcule exatamente o que for pedido "
+    "(contar, somar, filtrar, agrupar). "
+    f"As colunas disponíveis são: {cols}. "
+    "Quando houver campo de produção, considere `esta_produzindo == 'Sim'` como verdadeiro. "
+    "Responda de forma direta, mostrando números e, quando fizer sentido, uma frase breve de conclusão."
+)
+
 agent = create_pandas_dataframe_agent(
     llm=llm_agent,
     df=df,
+    agent_type="openai-tools",          # essencial para tool calling
     verbose=False,
     handle_parsing_errors=True,
-    allow_dangerous_code=True
+    allow_dangerous_code=True,
+    prefix=agent_prefix,
 )
 
-# =========================
-# Funções auxiliares
-# =========================
-
+# ============ Utilidades (se quiser usar em respostas rápidas) ============
 def faturamento_total(df_):
     return df_["faturamento"].sum() if "faturamento" in df_.columns else df_["faturamento (R$)"].sum()
 
@@ -98,16 +111,20 @@ def maior_menor_faturamento(df_):
     menor = faturamento_ano.idxmin()
     return maior, menor
 
+# Decisão simples: mandar para a planilha?
 def pergunta_envia_para_planilha(texto: str) -> bool:
     palavras_chave = [
         "lucro", "renda", "espécies", "especies", "produzindo", "produção", "anos",
         "quantos", "qual foi", "faturamento", "quanto gerou", "valores", "total",
-        "tipo", "individuos", "preco", "produto"
+        "tipo", "individuos", "preco", "produto", "ano", "maior", "menor"
     ]
     t = texto.lower()
     return any(k in t for k in palavras_chave)
 
-# ===== ENTRADA =====
+# (Opcional) depuração
+DEBUG = False
+
+# ============ Entrada do usuário ============
 query = st.chat_input("Pergunte algo sobre o SAF do Sítio Cristal!")
 
 if query:
@@ -117,12 +134,15 @@ if query:
     if pergunta_envia_para_planilha(query):
         with st.spinner("Consultando os dados do Sítio Cristal... 📊"):
             try:
+                if DEBUG:
+                    st.info(f"[DEBUG] Enviando ao agente: {query}")
                 resposta_dados = agent.run(query)
             except Exception as e:
                 resposta_dados = f"[Ops! Não consegui acessar os dados agora: {str(e)}]"
     else:
         resposta_dados = ""
 
+    # Instrução para o modelo de conversa (usa contexto da planilha quando houver)
     entrada = (
         "Você é a SAFBot 🐝, ajudante do Sítio Cristal. "
         "Explique de forma acolhedora e simples, sem jargões técnicos — como quem conversa na varanda. "
